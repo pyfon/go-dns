@@ -29,7 +29,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	var zones []Zone
+	var zones []Zone = make([]Zone, 0, len(files))
 	for _, file := range files {
 		zoneFile, err := os.Open(file)
 		if err != nil {
