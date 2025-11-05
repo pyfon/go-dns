@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"net/netip"
 )
 
@@ -20,17 +19,13 @@ type Record struct {
 	Name   string
 	Type   RecType
 	Addr   netip.Addr // A, AAAA
-	Target string     // CNAME NS, MX...
+	Target Domain     // For CNAMEs, MX etc
 	TXT    []string   // TXT
 	TTL    uint       // Seconds
 }
 
 type Zone struct {
-	Zone    string
+	Zone    Domain
+	TTL     int // Default TTL in seconds
 	Records []Record
-}
-
-// parseZone returns a
-func parseZone(reader *bufio.Reader) (Zone, error) {
-	return Zone{}, nil
 }

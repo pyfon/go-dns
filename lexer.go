@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"net/netip"
 	"strconv"
@@ -33,6 +34,7 @@ var RecordTypes = [...]string{
 	"TXT",
 	"MX",
 	"NS",
+	"PTR",
 }
 
 type Token struct {
@@ -42,16 +44,17 @@ type Token struct {
 
 type Lexer struct {
 	input *bufio.Reader
+	Line  int // Current line number
 }
 
 func NewLexer(input *bufio.Reader) Lexer {
-	return Lexer{input}
+	return Lexer{input: input, Line: 1}
 }
 
 // Next scans input for the next token and returns it.
 // This method will always return a TokenEOF upon EOF.
 func (l *Lexer) Next() (Token, error) {
-	s, eof, err := getToken(l.input)
+	s, eof, err := l.getToken()
 
 	if err != nil {
 		return Token{}, err
@@ -94,13 +97,13 @@ func (l *Lexer) Next() (Token, error) {
 // getToken reads runes from the input reader and builds a token value for
 // analysis. It throws away comments and whitespace, returning a word.
 // If EOF is true, input hit EOF on the first read, and no value is returned.
-func getToken(input *bufio.Reader) (value string, EOF bool, err error) {
+func (l *Lexer) getToken() (value string, EOF bool, err error) {
 	var buildVal strings.Builder
 	inComment := false // Whether we're currently reading a comment line.
 
 	// Read runes from input until we have built a full token for be analysed.
 	for {
-		r, _, err := input.ReadRune()
+		r, _, err := l.input.ReadRune()
 		if err != nil {
 			if err == io.EOF {
 				return "", true, nil
@@ -112,17 +115,19 @@ func getToken(input *bufio.Reader) (value string, EOF bool, err error) {
 		if unicode.IsSpace(r) {
 			if inComment && r == '\n' {
 				inComment = false
+				l.Line++
 				continue
 			}
 
 			if buildVal.Len() > 0 {
-				input.UnreadRune()
+				l.input.UnreadRune()
 				break
 			}
 
 			// Newline is a separate token.
 			if r == '\n' {
 				buildVal.WriteRune(r)
+				l.Line++
 				break
 			}
 
@@ -152,4 +157,28 @@ func stringIsAny(s string, strs []string) bool {
 		}
 	}
 	return false
+}
+
+func (t Token) String() string {
+	var typeStr string
+	valueStr := t.Value
+	switch t.Type {
+	case TokenIdent:
+		typeStr = "Identifier"
+	case TokenKeyword:
+		typeStr = "Keyword"
+	case TokenIP:
+		typeStr = "IP Address"
+	case TokenInt:
+		typeStr = "Integer"
+	case TokenRecType:
+		typeStr = "Record Type"
+	case TokenNewline:
+		typeStr = "Newline"
+		valueStr = `\n`
+	case TokenEOF:
+		typeStr = "EOF"
+	}
+
+	return fmt.Sprintf("%s: %s", typeStr, valueStr)
 }
