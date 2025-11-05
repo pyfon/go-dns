@@ -38,7 +38,9 @@ func main() {
 			os.Exit(1)
 		}
 		zoneReader := bufio.NewReader(zoneFile)
-		zone, err := parseZone(zoneReader)
+		lexer := NewLexer(zoneReader)
+		parser := NewParser(&lexer)
+		zone, err := parser.Parse()
 		zoneFile.Close()
 		if err != nil {
 			log.Error(err.Error())
