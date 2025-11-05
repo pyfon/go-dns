@@ -10,7 +10,7 @@ import (
 
 func init() {
 	log.SetOutput(os.Stdout)
-	log.SetLevel(log.DebugLevel)
+	log.SetLevel(log.TraceLevel) // FIXME: set to info.
 }
 
 func main() {

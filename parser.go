@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	log "github.com/sirupsen/logrus"
 )
 
 type Parser struct {
@@ -23,7 +24,7 @@ func (p *Parser) Parse() (Zone, error) {
 			break
 		}
 
-		fmt.Printf("%v", tok)
+		log.Tracef("Lexer gave token: %v\n", tok)
 	}
 
 	fmt.Println("")
