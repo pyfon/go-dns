@@ -26,6 +26,6 @@ type Record struct {
 
 type Zone struct {
 	Zone    Domain
-	TTL     int // Default TTL in seconds
-	Records []Record
+	TTL     int               // Default TTL in seconds
+	Records map[string]Record // Map of records indexed by name
 }

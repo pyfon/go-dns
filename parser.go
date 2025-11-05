@@ -20,6 +20,7 @@ func NewParser(l *Lexer, name string) Parser {
 func (p *Parser) Parse() (Zone, error) {
 	var zone Zone
 
+	// This loop is effectively ran for every line, as handlers consume the rest of the line.
 parseLoop:
 	for {
 		tok, err := p.Lexer.Next()
@@ -29,25 +30,33 @@ parseLoop:
 
 		switch tok.Type {
 		case TokenIdent:
-			// TODO
+			record, err := p.parseRecord(tok)
+			if err != nil {
+				return zone, err
+			}
+			zone.Records[record.Name] = record
 		case TokenKeyword:
 			if err := p.handleKeyword(tok, &zone); err != nil {
 				return zone, err
 			}
-		case TokenIP:
-			// TODO
-		case TokenInt:
-			// TODO
-		case TokenRecType:
-			// TODO
 		case TokenNewline:
-			continue parseLoop // FIXME: can we get rid of this case arm if we do nothing after the switch?
+			continue parseLoop
 		case TokenEOF:
 			break parseLoop
+		default:
+			errStr := fmt.Sprintf("%v Unexpected token: %v", p.Pos(), tok)
+			return Zone{}, errors.New(errStr)
 		}
 	}
 
-	return Zone{}, nil
+	return zone, nil
+}
+
+// parseRecord will parse a record line, starting with the domain name given, and return a corrisponding Record.
+func (p *Parser) parseRecord(name Token) (Record, error) {
+	var record Record
+	// --- TODO ---
+	return record, nil
 }
 
 // handleKeyword handles the given keyword, consuming from the lexer as required.
