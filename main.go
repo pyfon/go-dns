@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"os"
 	"path/filepath"
 
@@ -36,7 +37,8 @@ func main() {
 			log.Error(err.Error())
 			os.Exit(1)
 		}
-		zone, err := parseZone(zoneFile)
+		zoneReader := bufio.NewReader(zoneFile)
+		zone, err := parseZone(zoneReader)
 		zoneFile.Close()
 		if err != nil {
 			log.Error(err.Error())

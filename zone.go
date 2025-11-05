@@ -1,7 +1,7 @@
 package main
 
 import (
-	"io"
+	"bufio"
 	"net/netip"
 )
 
@@ -31,6 +31,6 @@ type Zone struct {
 }
 
 // parseZone returns a
-func parseZone(reader io.Reader) (Zone, error) {
+func parseZone(reader *bufio.Reader) (Zone, error) {
 	return Zone{}, nil
 }
