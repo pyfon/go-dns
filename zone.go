@@ -17,16 +17,16 @@ const (
 )
 
 type Record struct {
-	Name string
-	Type RecType
-	Addr netip.Addr // A, AAAA
-	Target string // CNAME NS, MX...
-	TXT []string // TXT
-	TTL	uint // Seconds
+	Name   string
+	Type   RecType
+	Addr   netip.Addr // A, AAAA
+	Target string     // CNAME NS, MX...
+	TXT    []string   // TXT
+	TTL    uint       // Seconds
 }
 
 type Zone struct {
-	Zone string
+	Zone    string
 	Records []Record
 }
 

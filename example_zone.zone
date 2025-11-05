@@ -1,9 +1,9 @@
 ; This is an example zone
 zone example.com.
-ttl 1d ; Zone default
+ttl 300 ; Zone default
 
 ; Records have the following syntax:
-; name  type     data               [optional ttl]
+; name  type     data               [optional ttl (seconds)]
 @       A        8.8.8.8
 www     CNAME    @
-ftp     AAAA     2001:43fa:800::1   600s
+ftp     AAAA     2001:43fa:800::1   600
