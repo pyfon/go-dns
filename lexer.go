@@ -110,7 +110,7 @@ func (l *Lexer) getToken() (value string, EOF bool, err error) {
 		if err != nil {
 			if err == io.EOF {
 				if inQuote {
-					return "", true, errors.New("Unterminated quoted string: hit EOF")
+					return "", true, errors.New("unterminated quoted string: hit EOF")
 				}
 				return "", true, nil
 			} else {
@@ -125,7 +125,7 @@ func (l *Lexer) getToken() (value string, EOF bool, err error) {
 				continue
 			}
 			if inQuote {
-				return "", false, errors.New("Line ends inside a quoted string")
+				return "", false, errors.New("uine ends inside a quoted string")
 			}
 			// Newlines are a separate token
 			if buildVal.Len() == 0 {
