@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"strconv"
 
 	log "github.com/sirupsen/logrus"
@@ -18,7 +19,7 @@ func NewParser(l *Lexer, name string) Parser {
 }
 
 func (p *Parser) Parse() (Zone, error) {
-	var zone Zone
+	zone := newZone()
 
 	// This loop is effectively ran for every line, as handlers consume the rest of the line.
 parseLoop:
@@ -34,7 +35,7 @@ parseLoop:
 			if err != nil {
 				return zone, err
 			}
-			zone.Records[record.Name] = record
+			zone.Records[record.Name.String()] = record
 		case TokenKeyword:
 			if err := p.handleKeyword(tok, &zone); err != nil {
 				return zone, err
@@ -53,15 +54,97 @@ parseLoop:
 }
 
 // parseRecord will parse a record line, starting with the domain name given, and return a corrisponding Record.
-func (p *Parser) parseRecord(name Token) (Record, error) {
+func (p *Parser) parseRecord(nameToken Token) (Record, error) {
 	var record Record
-	// --- TODO ---
+
+	// Name (domain) field
+	name := Domain(nameToken.Value)
+	if !name.Valid() {
+		errStr := fmt.Sprintf("%v %v is an invalid name", p.Pos(), name)
+		return record, errors.New(errStr)
+	}
+	if name.FQDN() {
+		errStr := fmt.Sprintf("%v %v is an FQDN - subdomains for zone are allowed only.", p.Pos(), name)
+		return record, errors.New(errStr)
+	}
+	record.Name = name
+
+	// Record type field
+	recTypeTok, err := p.Lexer.Next()
+	if err != nil {
+		return record, err
+	}
+	if recTypeTok.Type != TokenRecType {
+		errStr := fmt.Sprintf("%v Expected a record type, got unknown value: %v", p.Pos(), recTypeTok)
+		return record, errors.New(errStr)
+	}
+	recType, err := ParseRecType(recTypeTok.Value)
+	if err != nil {
+		return record, err
+	}
+	record.Type = recType
+
+	// Data/target field
+	data, err := p.Lexer.Next()
+	if err != nil {
+		return record, err
+	}
+	if data.Type == TokenNewline {
+		errStr := fmt.Sprintf("%v Expected data field, got newline", p.Pos())
+		return record, errors.New(errStr)
+	}
+	// We interpret and handle the data in different ways depending on the record type.
+	switch record.Type {
+	case TypeA, TypeAAAA:
+		if data.Type != TokenIP {
+			errStr := fmt.Sprintf("%v Expected IP address, got: %v", p.Pos(), data)
+			return record, errors.New(errStr)
+		}
+		ip, err := netip.ParseAddr(data.Value)
+		if err != nil {
+			return record, err
+		}
+		record.Addr = ip
+	case TypeCNAME, TypeMX, TypeNS:
+		target := Domain(data.Value)
+		if !target.Valid() {
+			errStr := fmt.Sprintf("%v %v is not a valid domain", p.Pos(), target)
+			return record, errors.New(errStr)
+		}
+		record.Target = target
+	case TypeTXT:
+		record.TXT = data.Value
+	}
+
+	// TTL
+	ttlTok, err := p.Lexer.Next()
+	if err != nil {
+		return record, err
+	}
+
+	if ttlTok.Type == TokenNewline {
+		return record, nil
+	}
+	if ttlTok.Type != TokenInt {
+		errStr := fmt.Sprintf("%v Expected an integer in TTL field, got: %v", p.Pos(), ttlTok)
+		return record, errors.New(errStr)
+	}
+	ttl, err := strconv.Atoi(ttlTok.Value)
+	if err != nil {
+		return record, err
+	}
+	if ttl <= 0 {
+		errStr := fmt.Sprintf("%v TTL value cannot be <=0, got %v", p.Pos(), ttl)
+		return record, errors.New(errStr)
+	}
+	record.TTL = uint(ttl)
+
 	return record, nil
 }
 
 // handleKeyword handles the given keyword, consuming from the lexer as required.
 // It will modify zone as required, unless an error occurs, in which case an error will be returned.
-func (p *Parser) handleKeyword(keyword Token, zone *Zone) (err error) {
+func (p *Parser) handleKeyword(keyword Token, zone *Zone) error {
 	switch keyword.Value {
 	case "zone":
 		return p.handleKWZone(zone)
@@ -97,6 +180,15 @@ func (p *Parser) handleKWZone(zone *Zone) (err error) {
 		log.Warningf("%v Zone domain is not an FQDN. Will assume it is.", p.Pos())
 	}
 
+	nl, err := p.Lexer.Next()
+	if err != nil {
+		return err
+	}
+	if nl.Type != TokenNewline && nl.Type != TokenEOF {
+		errStr := fmt.Sprintf("%v Unexpected value after zone specification: %v", p.Pos(), nl.Value)
+		return errors.New(errStr)
+	}
+
 	zone.Zone = domain
 	return nil
 }
@@ -116,8 +208,21 @@ func (p *Parser) handleKWTTL(zone *Zone) (err error) {
 	if err != nil {
 		return err
 	}
+	if ttl <= 0 {
+		errStr := fmt.Sprintf("%v TTL value cannot be <=0, got %v", p.Pos(), ttl)
+		return errors.New(errStr)
+	}
+	zone.TTL = uint(ttl)
 
-	zone.TTL = ttl
+	nl, err := p.Lexer.Next()
+	if err != nil {
+		return err
+	}
+	if nl.Type != TokenNewline && nl.Type != TokenEOF {
+		errStr := fmt.Sprintf("%v Unexpected value after ttl specification: %v", p.Pos(), nl.Value)
+		return errors.New(errStr)
+	}
+
 	return nil
 }
 

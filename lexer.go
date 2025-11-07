@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"net/netip"
@@ -100,46 +101,65 @@ func (l *Lexer) Next() (Token, error) {
 func (l *Lexer) getToken() (value string, EOF bool, err error) {
 	var buildVal strings.Builder
 	inComment := false // Whether we're currently reading a comment line.
+	inQuote := false   // Whether we're currently in a "quoted string".
+	escaped := false   // Whether the last rune was \
 
 	// Read runes from input until we have built a full token for be analysed.
 	for {
 		r, _, err := l.input.ReadRune()
 		if err != nil {
 			if err == io.EOF {
+				if inQuote {
+					return "", true, errors.New("Unterminated quoted string: hit EOF")
+				}
 				return "", true, nil
 			} else {
 				return "", false, err
 			}
 		}
 
-		if unicode.IsSpace(r) {
-			if inComment && r == '\n' {
+		if r == '\n' {
+			if inComment {
 				inComment = false
 				l.Line++
 				continue
 			}
-
-			if buildVal.Len() > 0 {
-				l.input.UnreadRune()
-				break
+			if inQuote {
+				return "", false, errors.New("Line ends inside a quoted string")
 			}
-
-			// Newline is a separate token.
-			if r == '\n' {
+			// Newlines are a separate token
+			if buildVal.Len() == 0 {
 				buildVal.WriteRune(r)
 				l.Line++
 				break
 			}
-
-			continue
 		}
 
 		if inComment {
 			continue
 		}
 
+		if unicode.IsSpace(r) && !inQuote {
+			if buildVal.Len() > 0 {
+				l.input.UnreadRune()
+				break
+			}
+
+			continue
+		}
+
 		if r == ';' {
 			inComment = true
+			continue
+		}
+
+		if r == '"' && !escaped {
+			inQuote = !inQuote
+			continue
+		}
+
+		if r == '\\' && !escaped {
+			escaped = true
 			continue
 		}
 

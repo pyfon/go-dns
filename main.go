@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -47,6 +48,11 @@ func main() {
 			os.Exit(1)
 		}
 		zones = append(zones, zone)
+	}
+
+	// DEBUG REMOVE FIXME
+	for _, zone := range zones {
+		fmt.Printf("%v\n", zone)
 	}
 }
 
