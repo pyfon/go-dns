@@ -10,11 +10,11 @@ type RecType string
 
 const (
 	TypeA RecType = "A"
-	TypeAAAA = "AAAA"
-	TypeCNAME = "CNAME"
-	TypeTXT = "TXT"
-	TypeMX = "MX"
-	TypeNS = "NS"
+	TypeAAAA RecType = "AAAA"
+	TypeCNAME RecType = "CNAME"
+	TypeTXT RecType = "TXT"
+	TypeMX RecType = "MX"
+	TypeNS RecType = "NS"
 )
 
 type Record struct {

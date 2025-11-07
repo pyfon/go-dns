@@ -120,8 +120,8 @@ func (l *Lexer) getToken() (value string, EOF bool, err error) {
 		if r == '\n' {
 			if inComment {
 				inComment = false
-				l.Line++
 				escaped = false
+				l.Line++
 				continue
 			}
 			if inQuote {
