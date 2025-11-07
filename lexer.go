@@ -28,14 +28,13 @@ var Keywords = [...]string{
 	"ttl",
 }
 
-var RecordTypes = [...]string{
-	"A",
-	"AAAA",
-	"CNAME",
-	"TXT",
-	"MX",
-	"NS",
-	"PTR",
+var RecordTypes = [...]RecType{
+	TypeA,
+	TypeAAAA,
+	TypeCNAME,
+	TypeTXT,
+	TypeMX,
+	TypeNS,
 }
 
 type Token struct {
@@ -173,9 +172,9 @@ func (l *Lexer) getToken() (value string, EOF bool, err error) {
 }
 
 // stringIsAny reports whether s equals any string in strs
-func stringIsAny(s string, strs []string) bool {
+func stringIsAny[T ~string](s string, strs []T) bool {
 	for _, str := range strs {
-		if s == str {
+		if s == string(str) {
 			return true
 		}
 	}

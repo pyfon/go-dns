@@ -1,21 +1,20 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"net/netip"
 	"strings"
 )
 
-type RecType int
+type RecType string
 
 const (
-	TypeA RecType = iota
-	TypeAAAA
-	TypeCNAME
-	TypeTXT
-	TypeMX
-	TypeNS
+	TypeA RecType = "A"
+	TypeAAAA = "AAAA"
+	TypeCNAME = "CNAME"
+	TypeTXT = "TXT"
+	TypeMX = "MX"
+	TypeNS = "NS"
 )
 
 type Record struct {
@@ -39,32 +38,13 @@ func newZone() Zone {
 	}
 }
 
-func ParseRecType(s string) (RecType, error) {
-	switch s {
-	case "A":
-		return TypeA, nil
-	case "AAAA":
-		return TypeAAAA, nil
-	case "CNAME":
-		return TypeCNAME, nil
-	case "TXT":
-		return TypeTXT, nil
-	case "MX":
-		return TypeMX, nil
-	case "NS":
-		return TypeNS, nil
-	}
-	errStr := fmt.Sprintf("Unknown record type: %v", s)
-	return 0, errors.New(errStr)
-}
-
 func (z Zone) String() string {
 	var s strings.Builder
 	s.WriteString("----------\n")
 	s.WriteString(fmt.Sprintf("ZONE %v\nTTL: %v\nRecords:\n", z.Zone, z.TTL))
 	for _, r := range z.Records {
 		// Ideally, this needs printing in a proper tabular format.
-		rStr := fmt.Sprintf("%v\t%v\t%v\t\t\t%v\n", r.Name, r.Type.String(), r.dataString(), r.TTLOrDefault(z))
+		rStr := fmt.Sprintf("%v\t%v\t%v\t\t\t%v\n", r.Name, r.Type, r.dataString(), r.TTLOrDefault(z))
 		s.WriteString(rStr)
 	}
 	s.WriteString("----------\n")
@@ -88,24 +68,6 @@ func (r Record) dataString() string {
 		return r.Target.String()
 	case TypeTXT:
 		return r.TXT
-	}
-	return ""
-}
-
-func (r RecType) String() string {
-	switch r {
-	case TypeA:
-		return "A"
-	case TypeAAAA:
-		return "AAAA"
-	case TypeCNAME:
-		return "CNAME"
-	case TypeTXT:
-		return "TXT"
-	case TypeMX:
-		return "MX"
-	case TypeNS:
-		return "NS"
 	}
 	return ""
 }
