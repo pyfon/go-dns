@@ -122,10 +122,11 @@ func (l *Lexer) getToken() (value string, EOF bool, err error) {
 			if inComment {
 				inComment = false
 				l.Line++
+				escaped = false
 				continue
 			}
 			if inQuote {
-				return "", false, errors.New("uine ends inside a quoted string")
+				return "", false, errors.New("line ends inside a quoted string")
 			}
 			// Newlines are a separate token
 			if buildVal.Len() == 0 {
@@ -145,16 +146,12 @@ func (l *Lexer) getToken() (value string, EOF bool, err error) {
 				break
 			}
 
+			escaped = false
 			continue
 		}
 
-		if r == ';' {
+		if r == ';' && !inQuote && !escaped {
 			inComment = true
-			continue
-		}
-
-		if r == '"' && !escaped {
-			inQuote = !inQuote
 			continue
 		}
 
@@ -163,7 +160,13 @@ func (l *Lexer) getToken() (value string, EOF bool, err error) {
 			continue
 		}
 
+		if r == '"' && !escaped {
+			inQuote = !inQuote
+			continue
+		}
+
 		buildVal.WriteRune(r)
+		escaped = false
 	}
 
 	return buildVal.String(), false, nil
