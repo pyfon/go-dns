@@ -31,7 +31,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	var zones []Zone = make([]Zone, 0, len(files))
+	var zones map[Domain]*Zone = make(map[Domain]*Zone) // Indexed by zone name (domain)
 	for _, file := range files {
 		zoneFile, err := os.Open(file)
 		if err != nil {
@@ -47,13 +47,26 @@ func main() {
 			log.Error(err.Error())
 			os.Exit(1)
 		}
-		zones = append(zones, zone)
+		if _, exists := zones[zone.Zone]; exists {
+			log.Errorf("Duplicate zone: %v", zone.Zone.String())
+			os.Exit(1)
+		}
+		zones[zone.Zone] = &zone
 	}
 
-	// DEBUG REMOVE FIXME
+	// --------- DEBUG REMOVE FIXME ---------
 	for _, zone := range zones {
 		fmt.Printf("%v\n", zone)
 	}
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fmt.Printf("Best match:\n%v\n", FindBestZoneMatch(zones, Domain(line)))
+	}
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintln(os.Stderr, "Error reading input:", err)
+	}
+	// --------- DEBUG REMOVE FIXME ---------
 }
 
 // getFiles returns a list of valid, resolved file paths of all files recursively found under dirPath.
