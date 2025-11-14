@@ -11,7 +11,7 @@ type Domain string
 
 // Valid reports whether the domain is a valid domain.
 func (d Domain) Valid() bool {
-	if d == "@" {
+	if d == "@" || d == "*" {
 		return true
 	}
 	return domainRegex.MatchString(string(d))

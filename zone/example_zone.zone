@@ -9,3 +9,4 @@ www     CNAME    @
 ftp     AAAA     2001:43fa:800::1   600
 txt     TXT      "hello, \"world haha"
 wow     TXT      "another string ;;;" 400
+*       A        1.1.1.1
