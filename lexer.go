@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	log "github.com/sirupsen/logrus"
 )
 
 type TokenType int
@@ -60,38 +61,15 @@ func (l *Lexer) Next() (Token, error) {
 		return Token{}, err
 	}
 
-	// TokenEOF
+	var token Token
 	if eof {
-		return Token{Type: TokenEOF}, nil
+		token = Token{Type: TokenEOF}
+	} else {
+		token = l.parseValue(s)
 	}
 
-	// TokenNewline
-	if s == "\n" {
-		return Token{Type: TokenNewline, Value: s}, nil
-	}
-
-	// TokenInt
-	if _, err := strconv.Atoi(s); err == nil {
-		return Token{Type: TokenInt, Value: s}, nil
-	}
-
-	// TokenKeyword
-	if stringIsAny(s, Keywords[:]) {
-		return Token{Type: TokenKeyword, Value: s}, nil
-	}
-
-	// TokenRecType
-	if stringIsAny(s, RecordTypes[:]) {
-		return Token{Type: TokenRecType, Value: s}, nil
-	}
-
-	// TokenIP
-	if _, err := netip.ParseAddr(s); err == nil {
-		return Token{Type: TokenIP, Value: s}, nil
-	}
-
-	// TokenIdent
-	return Token{Type: TokenIdent, Value: s}, nil
+	log.Trace(token)
+	return token, nil
 }
 
 // getToken reads runes from the input reader and builds a token value for
@@ -118,12 +96,6 @@ func (l *Lexer) getToken() (value string, EOF bool, err error) {
 		}
 
 		if r == '\n' {
-			if inComment {
-				inComment = false
-				escaped = false
-				l.Line++
-				continue
-			}
 			if inQuote {
 				return "", false, errors.New("line ends inside a quoted string")
 			}
@@ -169,6 +141,37 @@ func (l *Lexer) getToken() (value string, EOF bool, err error) {
 	}
 
 	return buildVal.String(), false, nil
+}
+
+// parseValue parses a string and returns a matching Token.
+func (l *Lexer) parseValue(s string) Token {
+	// TokenNewline
+	if s == "\n" {
+		return Token{Type: TokenNewline, Value: s}
+	}
+
+	// TokenInt
+	if _, err := strconv.Atoi(s); err == nil {
+		return Token{Type: TokenInt, Value: s}
+	}
+
+	// TokenKeyword
+	if stringIsAny(s, Keywords[:]) {
+		return Token{Type: TokenKeyword, Value: s}
+	}
+
+	// TokenRecType
+	if stringIsAny(s, RecordTypes[:]) {
+		return Token{Type: TokenRecType, Value: s}
+	}
+
+	// TokenIP
+	if _, err := netip.ParseAddr(s); err == nil {
+		return Token{Type: TokenIP, Value: s}
+	}
+
+	// TokenIdent
+	return Token{Type: TokenIdent, Value: s}
 }
 
 // stringIsAny reports whether s equals any string in strs

@@ -19,7 +19,7 @@ func NewParser(l *Lexer, name string) Parser {
 }
 
 func (p *Parser) Parse() (Zone, error) {
-	zone := newZone()
+	zone := NewZone()
 
 	// This loop is effectively ran for every line, as handlers consume the rest of the line.
 parseLoop:
@@ -58,13 +58,9 @@ func (p *Parser) parseRecord(nameToken Token) (Record, error) {
 	var record Record
 
 	// Name (domain) field
-	name := Domain(nameToken.Value)
+	name := RecordName(nameToken.Value)
 	if !name.Valid() {
 		errStr := fmt.Sprintf("%v %v is an invalid name", p.Pos(), name)
-		return record, errors.New(errStr)
-	}
-	if name.FQDN() {
-		errStr := fmt.Sprintf("%v %v is an FQDN - subdomains for zone are allowed only.", p.Pos(), name)
 		return record, errors.New(errStr)
 	}
 	record.Name = name
@@ -104,12 +100,12 @@ func (p *Parser) parseRecord(nameToken Token) (Record, error) {
 	case TypeCNAME, TypeMX, TypeNS:
 		target := Domain(data.Value)
 		if !target.Valid() {
-			errStr := fmt.Sprintf("%v %v is not a valid domain", p.Pos(), target)
+			errStr := fmt.Sprintf("%v Invalid RDATA domain: %v", p.Pos(), target)
 			return record, errors.New(errStr)
 		}
 		record.Target = target
 	case TypeTXT:
-		record.TXT = data.Value
+		record.TXT = NewTXTData(data.Value)
 	}
 
 	// TTL
@@ -118,7 +114,7 @@ func (p *Parser) parseRecord(nameToken Token) (Record, error) {
 		return record, err
 	}
 
-	if ttlTok.Type == TokenNewline {
+	if ttlTok.Type == TokenNewline || ttlTok.Type == TokenEOF {
 		return record, nil
 	}
 	if ttlTok.Type != TokenInt {
