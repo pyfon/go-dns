@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,7 +12,7 @@ import (
 
 func init() {
 	log.SetOutput(os.Stdout)
-	log.SetLevel(log.TraceLevel) // FIXME: set to info.
+	log.SetLevel(log.DebugLevel) // FIXME: set to info.
 }
 
 func main() {
@@ -25,52 +26,23 @@ func main() {
 	zonePath := os.Args[1]
 	log.Debugf("Parsing zone files in %s", zonePath)
 
-	files, err := getFiles(zonePath)
+	zoneFilePaths, err := getZoneFilePaths(zonePath)
 	if err != nil {
 		log.Errorf("Couldn't gather zone files in %v: %v", zonePath, err)
 		os.Exit(1)
 	}
 
-	var zones map[Domain]*Zone = make(map[Domain]*Zone) // Indexed by zone name (domain)
-	for _, file := range files {
-		zoneFile, err := os.Open(file)
-		if err != nil {
-			log.Error(err.Error())
-			os.Exit(1)
-		}
-		zoneReader := bufio.NewReader(zoneFile)
-		lexer := NewLexer(zoneReader)
-		parser := NewParser(&lexer, filepath.Base(file))
-		zone, err := parser.Parse()
-		zoneFile.Close()
-		if err != nil {
-			log.Error(err.Error())
-			os.Exit(1)
-		}
-		if _, exists := zones[zone.Zone]; exists {
-			log.Errorf("Duplicate zone: %v", zone.Zone.String())
-			os.Exit(1)
-		}
-		zones[zone.Zone] = &zone
+	zones, err := parseZoneFiles(zoneFilePaths)
+	if err != nil {
+		log.Errorf("Could not parse zone files: %v", err)
+		os.Exit(1)
 	}
 
-	// --------- DEBUG REMOVE FIXME ---------
-	for _, zone := range zones {
-		fmt.Printf("%v\n", zone)
-	}
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		line := scanner.Text()
-		fmt.Printf("Best match:\n%v\n", FindBestZoneMatch(zones, Domain(line)))
-	}
-	if err := scanner.Err(); err != nil {
-		fmt.Fprintln(os.Stderr, "Error reading input:", err)
-	}
-	// --------- DEBUG REMOVE FIXME ---------
+	fmt.Printf("%v\n", zones) // TODO REMOVE
 }
 
 // getFiles returns a list of valid, resolved file paths of all files recursively found under dirPath.
-func getFiles(dirPath string) ([]string, error) {
+func getZoneFilePaths(dirPath string) ([]string, error) {
 	var files []string
 
 	evalDirEnt := func(path string, d os.DirEntry, err error) error {
@@ -97,4 +69,30 @@ func getFiles(dirPath string) ([]string, error) {
 	}
 
 	return files, nil
+}
+
+// parseZoneFiles takes a list of zone file paths, parses each one into a Zone object,
+// and returns a map of pointers to corresponding zone objects, index by zone name.
+func parseZoneFiles(zoneFiles []string) (map[Domain]*Zone, error) {
+	var zones map[Domain]*Zone = make(map[Domain]*Zone)
+	for _, file := range zoneFiles {
+		zoneFile, err := os.Open(file)
+		if err != nil {
+			return zones, err
+		}
+		zoneReader := bufio.NewReader(zoneFile)
+		lexer := NewLexer(zoneReader)
+		parser := NewParser(&lexer, filepath.Base(file))
+		zone, err := parser.Parse()
+		zoneFile.Close()
+		if err != nil {
+			return zones, err
+		}
+		if _, exists := zones[zone.Zone]; exists {
+			errStr := fmt.Sprintf("Duplicate zone: %v", zone.Zone.String())
+			return zones, errors.New(errStr)
+		}
+		zones[zone.Zone] = &zone
+	}
+	return zones, nil
 }
