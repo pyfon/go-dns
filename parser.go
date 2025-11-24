@@ -155,7 +155,7 @@ func (p *Parser) handleKWZone(zone *Zone) (err error) {
 	if err != nil {
 		return err
 	}
-	if len(zone.Zone) > 0 {
+	if len(zone.Name) > 0 {
 		errStr := fmt.Sprintf("%v zone domain already specifed for this zone", p.Pos())
 		return errors.New(errStr)
 	}
@@ -181,7 +181,7 @@ func (p *Parser) handleKWZone(zone *Zone) (err error) {
 		return errors.New(errStr)
 	}
 
-	zone.Zone = domain
+	zone.Name = domain
 	return nil
 }
 

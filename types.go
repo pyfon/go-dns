@@ -31,7 +31,7 @@ type Record struct {
 }
 
 type Zone struct {
-	Zone    Domain
+	Name    Domain            // Domain the zone is responsible for.
 	TTL     uint              // Default TTL in seconds
 	Records map[string]Record // Map of records indexed by name
 }
@@ -130,7 +130,7 @@ func (t TXTData) String() string {
 func (z Zone) String() string {
 	var s strings.Builder
 	s.WriteString("----------\n")
-	s.WriteString(fmt.Sprintf("ZONE %v\nTTL: %v\nRecords:\n", z.Zone, z.TTL))
+	s.WriteString(fmt.Sprintf("ZONE %v\nTTL: %v\nRecords:\n", z.Name, z.TTL))
 	for _, r := range z.Records {
 		// Ideally, this needs printing in a proper tabular format.
 		rStr := fmt.Sprintf("%v\t%v\t%v\t\t\t%v\n", r.Name, r.Type, r.dataString(), r.TTLOrDefault(z))

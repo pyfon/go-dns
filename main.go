@@ -42,7 +42,7 @@ func main() {
 }
 
 // getFiles returns a list of valid, resolved file paths of all files recursively found under dirPath.
-func getZoneFilePaths(dirPath string) ([]string, error) {
+func getZoneFilePaths(zoneDirPath string) ([]string, error) {
 	var files []string
 
 	evalDirEnt := func(path string, d os.DirEntry, err error) error {
@@ -64,7 +64,7 @@ func getZoneFilePaths(dirPath string) ([]string, error) {
 		return nil
 	}
 
-	if err := filepath.WalkDir(dirPath, evalDirEnt); err != nil {
+	if err := filepath.WalkDir(zoneDirPath, evalDirEnt); err != nil {
 		return nil, err
 	}
 
@@ -72,7 +72,7 @@ func getZoneFilePaths(dirPath string) ([]string, error) {
 }
 
 // parseZoneFiles takes a list of zone file paths, parses each one into a Zone object,
-// and returns a map of pointers to corresponding zone objects, index by zone name.
+// and returns a map of pointers to corresponding zone objects, indexed by zone name.
 func parseZoneFiles(zoneFiles []string) (map[Domain]*Zone, error) {
 	var zones map[Domain]*Zone = make(map[Domain]*Zone)
 	for _, file := range zoneFiles {
@@ -88,11 +88,11 @@ func parseZoneFiles(zoneFiles []string) (map[Domain]*Zone, error) {
 		if err != nil {
 			return zones, err
 		}
-		if _, exists := zones[zone.Zone]; exists {
-			errStr := fmt.Sprintf("Duplicate zone: %v", zone.Zone.String())
+		if _, exists := zones[zone.Name]; exists {
+			errStr := fmt.Sprintf("Duplicate zone: %v", zone.Name)
 			return zones, errors.New(errStr)
 		}
-		zones[zone.Zone] = &zone
+		zones[zone.Name] = &zone
 	}
 	return zones, nil
 }
