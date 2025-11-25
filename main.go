@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,23 +13,34 @@ import (
 
 func init() {
 	log.SetOutput(os.Stdout)
-	log.SetLevel(log.DebugLevel) // FIXME: set to info.
+	log.SetLevel(log.InfoLevel) // FIXME: set to info.
 }
 
 func main() {
-	log.Info("Nathan's DNS Server")
+	var hosts HostList
+	var ports PortList
+	zonePath := flag.String("zones", "", "A path to a directory containing one or more zone files")
+	logLevel := flag.String("logLevel", "info", "log level (debug, info, warn, error, fatal, panic)")
+	flag.Var(&hosts, "addr", "Listen on given address (use flag multiple times for multiple addresses)")
+	flag.Var(&ports, "port", "Listen on given port (use flag multiple times for multiple ports)")
+	flag.Parse()
 
-	if len(os.Args) <= 1 {
-		log.Error("Missing command line argument: path to a directory of zone files")
+	level, err := log.ParseLevel(*logLevel)
+	if err != nil {
+		log.Errorf("Invalid logLevel given: %v", err)
 		os.Exit(1)
 	}
+	log.SetLevel(level)
 
-	zonePath := os.Args[1]
-	log.Debugf("Parsing zone files in %s", zonePath)
+	if len(*zonePath) <= 0 {
+		log.Errorf("Missing required argument: -zones")
+		os.Exit(1)
+	}
+	log.Debugf("Parsing zone files in %s", *zonePath)
 
-	zoneFilePaths, err := getZoneFilePaths(zonePath)
+	zoneFilePaths, err := getZoneFilePaths(*zonePath)
 	if err != nil {
-		log.Errorf("Couldn't gather zone files in %v: %v", zonePath, err)
+		log.Errorf("Couldn't gather zone files in %v: %v", *zonePath, err)
 		os.Exit(1)
 	}
 
