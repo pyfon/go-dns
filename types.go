@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"net/netip"
-	"strings"
 	"regexp"
+	"strings"
 )
 
 type Domain string
@@ -44,15 +44,15 @@ var recordNameRegex *regexp.Regexp = regexp.MustCompile(`^(?:@|\*|(?:\*\.)?(?:[A
 
 func NewTXTData(data string) TXTData {
 	b := []byte(data)
-    var out [][]byte
+	var out [][]byte
 
-    for len(b) > 255 {
-        out = append(out, b[:255])
-        b = b[255:]
-    }
-    out = append(out, b)
+	for len(b) > 255 {
+		out = append(out, b[:255])
+		b = b[255:]
+	}
+	out = append(out, b)
 
-    return TXTData(out)
+	return TXTData(out)
 }
 
 func NewZone() Zone {

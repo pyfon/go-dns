@@ -4,12 +4,12 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"net/netip"
 	"strconv"
 	"strings"
 	"unicode"
-	log "github.com/sirupsen/logrus"
 )
 
 type TokenType int
