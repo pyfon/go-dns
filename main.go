@@ -17,12 +17,10 @@ func init() {
 }
 
 func main() {
-	var hosts HostList
-	var ports PortList
+	var sockets SocketList
 	zonePath := flag.String("zones", "", "A path to a directory containing one or more zone files")
 	logLevel := flag.String("logLevel", "info", "log level (debug, info, warn, error, fatal, panic)")
-	flag.Var(&hosts, "addr", "Listen on given address (use flag multiple times for multiple addresses)")
-	flag.Var(&ports, "port", "Listen on given port (use flag multiple times for multiple ports)")
+	flag.Var(&sockets, "listen", "Listen on a given ADDR:PORT pair. (use flag multiple times for multiple sockets)")
 	flag.Parse()
 
 	level, err := log.ParseLevel(*logLevel)
@@ -50,7 +48,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("%v\n", zones) // TODO REMOVE
+	// --- REMOVE ALL THIS ---
+	fmt.Printf("%v\n", zones)
+	fmt.Printf("%v\n", sockets)
+	// --- REMOVE ALL THIS ---
 }
 
 // getFiles returns a list of valid, resolved file paths of all files recursively found under dirPath.
