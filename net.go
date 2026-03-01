@@ -3,43 +3,53 @@ package main
 import (
 	"fmt"
 	"net"
-	"strconv"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type SocketList []net.UDPAddr
 
+// Serve DNS on the given socket until program termination.
+func Serve(sock *net.UDPAddr) error {
+	conn, err := net.ListenUDP("udp", sock)
+	if err != nil {
+		log.Errorf("Could not serve on socket %v: %v", sock, err)
+		return err
+	}
+	defer conn.Close()
+	log.Infof("Serving DNS on %v:%v", sock.IP, sock.Port)
+
+	for {
+		buf := make([]byte, 512)
+		_, raddr, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			log.Errorf("Could not read UDP request: %v", err)
+			continue
+		}
+		go Respond(conn, raddr, buf)
+	}
+}
+
+// Respond to a DNS query.
+func Respond(conn *net.UDPConn, raddr *net.UDPAddr, query []byte) {
+	// --- TODO REMOVE ---
+	log.Infof("Received query from %v", raddr)
+	_, err := conn.WriteToUDP([]byte("boo!"), raddr)
+	if err != nil {
+		log.Errorf("Can't write to socket: %v", err)
+	}
+	// --- TODO REMOVE ---
+}
+
 func (h *SocketList) Set(s string) error {
-	host, portStr, err := net.SplitHostPort(s)
+	addr, err := net.ResolveUDPAddr("udp", s)
 	if err != nil {
 		return err
 	}
-	ips, err := hostToIP(host)
-	if err != nil {
-		return err
-	}
-	port, err := strconv.Atoi(portStr)
-	if err != nil {
-		return err
-	}
-	for _, ip := range ips {
-		*h = append(*h, net.UDPAddr{IP: ip, Port: port})
-	}
+	*h = append(*h, *addr)
 	return nil
 }
 
 func (h *SocketList) String() string {
 	return fmt.Sprint(*h)
-}
-
-func hostToIP(host string) ([]net.IP, error) {
-	ip := net.ParseIP(host)
-	if ip != nil {
-		return []net.IP{ip}, nil
-	}
-	// host might be a hostname.
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		return nil, err
-	}
-	return ips, nil
 }

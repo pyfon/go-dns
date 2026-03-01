@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 )
 
 func init() {
@@ -42,16 +43,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	zones, err := parseZoneFiles(zoneFilePaths)
+	_, err = parseZoneFiles(zoneFilePaths) // TODO zones, err := ...
 	if err != nil {
 		log.Errorf("Could not parse zone files: %v", err)
 		os.Exit(1)
 	}
 
-	// --- REMOVE ALL THIS ---
-	fmt.Printf("%v\n", zones)
-	fmt.Printf("%v\n", sockets)
-	// --- REMOVE ALL THIS ---
+	var g errgroup.Group
+	for _, sock := range sockets {
+		g.Go(func() error {
+			return Serve(&sock)
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		log.Error(err)
+		os.Exit(-1) // TODO use errgroup contexts to exit cleanly!
+	}
 }
 
 // getFiles returns a list of valid, resolved file paths of all files recursively found under dirPath.
