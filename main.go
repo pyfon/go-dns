@@ -43,7 +43,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	_, err = parseZoneFiles(zoneFilePaths) // TODO zones, err := ...
+	zones, err := parseZoneFiles(zoneFilePaths)
 	if err != nil {
 		log.Errorf("Could not parse zone files: %v", err)
 		os.Exit(1)
@@ -52,7 +52,7 @@ func main() {
 	var g errgroup.Group
 	for _, sock := range sockets {
 		g.Go(func() error {
-			return Serve(&sock)
+			return Serve(sock, zones)
 		})
 	}
 
@@ -93,13 +93,13 @@ func getZoneFilePaths(zoneDirPath string) ([]string, error) {
 }
 
 // parseZoneFiles takes a list of zone file paths, parses each one into a Zone object,
-// and returns a map of pointers to corresponding zone objects, indexed by zone name.
-func parseZoneFiles(zoneFiles []string) (map[Domain]*Zone, error) {
-	var zones map[Domain]*Zone = make(map[Domain]*Zone)
+// and returns a trie of Zones for fast lookup.
+func parseZoneFiles(zoneFiles []string) (ZoneTrie, error) {
+	var zones map[Domain]Zone = make(map[Domain]Zone)
 	for _, file := range zoneFiles {
 		zoneFile, err := os.Open(file)
 		if err != nil {
-			return zones, err
+			return ZoneTrie{}, err
 		}
 		zoneReader := bufio.NewReader(zoneFile)
 		lexer := NewLexer(zoneReader)
@@ -107,13 +107,13 @@ func parseZoneFiles(zoneFiles []string) (map[Domain]*Zone, error) {
 		zone, err := parser.Parse()
 		zoneFile.Close()
 		if err != nil {
-			return zones, err
+			return ZoneTrie{}, err
 		}
 		if _, exists := zones[zone.Name]; exists {
 			errStr := fmt.Sprintf("Duplicate zone: %v", zone.Name)
-			return zones, errors.New(errStr)
+			return ZoneTrie{}, errors.New(errStr)
 		}
-		zones[zone.Name] = &zone
+		zones[zone.Name] = zone
 	}
-	return zones, nil
+	return NewZoneTrie(zones), nil
 }

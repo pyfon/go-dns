@@ -36,11 +36,27 @@ type Zone struct {
 	Records map[string]Record // Map of records indexed by name
 }
 
+type ZoneTrie Trie[Zone]
+
 // domainRegex defines a regex for a valid domain name. This does NOT include @ and wildcard domains.
 var domainRegex *regexp.Regexp = regexp.MustCompile(`^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.?)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]\.?$`)
 
 // Matches valid record names like "example" and "*.example", "@"
 var recordNameRegex *regexp.Regexp = regexp.MustCompile(`^(?:@|\*|(?:\*\.)?(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*)$`)
+
+func NewZoneTrie(zones map[Domain]Zone) ZoneTrie {
+	trie := NewTrie[Zone]()
+	for _, zone := range zones {
+		trie.Insert(zone.Name, zone)
+	}
+	return ZoneTrie(trie)
+}
+
+func NewZone() Zone {
+	return Zone{
+		Records: make(map[string]Record),
+	}
+}
 
 func NewTXTData(data string) TXTData {
 	b := []byte(data)
@@ -53,12 +69,6 @@ func NewTXTData(data string) TXTData {
 	out = append(out, b)
 
 	return TXTData(out)
-}
-
-func NewZone() Zone {
-	return Zone{
-		Records: make(map[string]Record),
-	}
 }
 
 // FQDN reports whether Domain is fully-qualified. It does not check for domain validity.

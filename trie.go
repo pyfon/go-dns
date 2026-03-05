@@ -56,9 +56,3 @@ func (t *Trie[T]) Search(key Domain) (T, bool) {
 	}
 	return node.value, true
 }
-
-// func NewZoneTrie(zones []Zone) Trie[Zone] {
-// 	var trie Trie[Zone]
-// 	for _, zone := range zones {
-// 	}
-// }
