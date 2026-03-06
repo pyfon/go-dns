@@ -94,12 +94,12 @@ func getZoneFilePaths(zoneDirPath string) ([]string, error) {
 
 // parseZoneFiles takes a list of zone file paths, parses each one into a Zone object,
 // and returns a trie of Zones for fast lookup.
-func parseZoneFiles(zoneFiles []string) (ZoneTrie, error) {
+func parseZoneFiles(zoneFiles []string) (Trie[Zone], error) {
 	var zones map[Domain]Zone = make(map[Domain]Zone)
 	for _, file := range zoneFiles {
 		zoneFile, err := os.Open(file)
 		if err != nil {
-			return ZoneTrie{}, err
+			return NewTrie[Zone](), err
 		}
 		zoneReader := bufio.NewReader(zoneFile)
 		lexer := NewLexer(zoneReader)
@@ -107,13 +107,14 @@ func parseZoneFiles(zoneFiles []string) (ZoneTrie, error) {
 		zone, err := parser.Parse()
 		zoneFile.Close()
 		if err != nil {
-			return ZoneTrie{}, err
+			return NewTrie[Zone](), err
 		}
 		if _, exists := zones[zone.Name]; exists {
 			errStr := fmt.Sprintf("Duplicate zone: %v", zone.Name)
-			return ZoneTrie{}, errors.New(errStr)
+			return NewTrie[Zone](), errors.New(errStr)
 		}
 		zones[zone.Name] = zone
 	}
+
 	return NewZoneTrie(zones), nil
 }

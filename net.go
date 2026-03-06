@@ -10,7 +10,7 @@ import (
 type SocketList []net.UDPAddr
 
 // Serve DNS on the given socket until program termination.
-func Serve(sock net.UDPAddr, zones ZoneTrie) error {
+func Serve(sock net.UDPAddr, zones Trie[Zone]) error {
 	conn, err := net.ListenUDP("udp", &sock)
 	if err != nil {
 		log.Errorf("Could not serve on socket %v: %v", sock, err)
@@ -31,7 +31,7 @@ func Serve(sock net.UDPAddr, zones ZoneTrie) error {
 }
 
 // Respond to a DNS query.
-func Respond(conn *net.UDPConn, raddr *net.UDPAddr, query []byte, zones *ZoneTrie) {
+func Respond(conn *net.UDPConn, raddr *net.UDPAddr, query []byte, zones *Trie[Zone]) {
 	// --- TODO REMOVE ---
 	log.Infof("Received query from %v", raddr)
 	_, err := conn.WriteToUDP([]byte("boo!"), raddr)
