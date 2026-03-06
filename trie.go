@@ -9,18 +9,18 @@ type Trie[T any] struct {
 }
 
 type trieNode[T any] struct {
-	value T
+	value    T
 	children map[string]*trieNode[T]
 }
 
 func NewTrie[T any]() Trie[T] {
-	return Trie[T] {
+	return Trie[T]{
 		root: newTrieNode[T](),
 	}
 }
 
 func newTrieNode[T any]() trieNode[T] {
-	return trieNode[T] {
+	return trieNode[T]{
 		children: make(map[string]*trieNode[T]),
 	}
 }
@@ -31,7 +31,7 @@ func (t *Trie[T]) Insert(key Domain, value T) {
 	// Iterate through the DNS in reverese order so we can fill out the tree from the root.
 	node := &t.root
 	for i := len(labels) - 1; i >= 0; i-- {
-		child :=  node.children[labels[i]]
+		child := node.children[labels[i]]
 		if child == nil {
 			newNode := newTrieNode[T]()
 			child = &newNode
@@ -43,16 +43,16 @@ func (t *Trie[T]) Insert(key Domain, value T) {
 }
 
 // Search will retrieve the value for the given key, and a boolean indicating whether the node exists.
-// If the node does not exist, the bool will be false. Otherwise, it will be true.
+// If the node does not exist, the bool will be false and the deepest match will be returned, starting from the root.
 func (t *Trie[T]) Search(key Domain) (T, bool) {
 	labels := strings.Split(string(key), ".")
 	node := &t.root
 	for i := len(labels) - 1; i >= 0; i-- {
-		node =  node.children[labels[i]]
-		if node == nil {
-			var zero T
-			return zero, false
+		child := node.children[labels[i]]
+		if child == nil {
+			return node.value, false
 		}
+		node = child
 	}
 	return node.value, true
 }

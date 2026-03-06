@@ -2,7 +2,6 @@ package main
 
 import "testing"
 
-// WIP: quick test.
 func TestTrie(t *testing.T) {
 	trie := NewTrie[string]()
 	key := Domain("my.test.domain.example.com")
@@ -34,7 +33,8 @@ func testZones() map[Domain]Zone {
 	return zoneMap
 }
 
-func TestZoneTrie(t *testing.T) {
+// TestZoneTrieExact ensures that we get the zone which exactly matches the search argument.
+func TestZoneTrieExact(t *testing.T) {
 	zones := testZones()
 	zoneTrie := NewZoneTrie(zones)
 
@@ -46,5 +46,20 @@ func TestZoneTrie(t *testing.T) {
 		if result.Name != zone.Name {
 			t.Errorf("Wrong zone returned from zone. Expected zone %s, got zone %s", zone.Name, result.Name)
 		}
+	}
+}
+
+// TestZoneTrieClosest ensures that we get the closest ancestor of the a searched domain if there isn't an exact match.
+func TestZoneTrieClosest(t *testing.T) {
+	zones := testZones()
+	zoneTrie := NewZoneTrie(zones)
+	domain := Domain("other.x.example.com")
+	zone, exists := zoneTrie.Search(Domain("other.x.example.com"))
+	if exists {
+		t.Errorf("%s exists in the tree for some reason.", domain)
+	}
+	expected := Domain("x.example.com")
+	if zone.Name != expected {
+		t.Errorf("Didn't get closest ancestor of %s, Expected: %s. Got: %s", domain, expected, zone.Name)
 	}
 }
