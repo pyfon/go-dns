@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/netip"
 	"regexp"
@@ -33,7 +34,14 @@ type Record struct {
 type Zone struct {
 	Name    Domain            // Domain the zone is responsible for.
 	TTL     uint              // Default TTL in seconds
-	Records map[string]Record // Map of records indexed by name
+	Records Trie[RData]
+}
+
+type RData struct {
+	Initialised bool
+	empty bool
+	hasCNAME bool
+	rdata map[RecType][]Record
 }
 
 // domainRegex defines a regex for a valid domain name. This does NOT include @ and wildcard domains.
@@ -44,14 +52,14 @@ var recordNameRegex *regexp.Regexp = regexp.MustCompile(`^(?:@|\*|(?:\*\.)?(?:[A
 
 func NewZone() Zone {
 	return Zone{
-		Records: make(map[string]Record),
+		Records: NewTrie[RData](),
 	}
 }
 
 func NewZoneTrie(zones map[Domain]Zone) Trie[Zone] {
 	trie := NewTrie[Zone]()
 	for _, zone := range zones {
-		trie.Insert(zone.Name, zone)
+		trie.Insert(string(zone.Name), zone)
 	}
 	return trie
 }
@@ -67,6 +75,15 @@ func NewTXTData(data string) TXTData {
 	out = append(out, b)
 
 	return TXTData(out)
+}
+
+func NewRData() RData {
+	return RData{
+		Initialised: true,
+		empty: true,
+		hasCNAME: false,
+		rdata: make(map[RecType][]Record),
+	}
 }
 
 // FindBestZoneMatch finds the zone which is the most specific match for domain in the zone map
@@ -141,9 +158,35 @@ func (r RecordName) String() string {
 	return string(r)
 }
 
+// TrieKey converts r into a key for a Trie[RData].
+// Wildcards simply have a node referenced by "*".
+func (r RecordName) TrieKey(zoneName Domain) string {
+	if r.Root() {
+		return "" // An empty key yields the root node.
+	}
+	return r.String()
+}
+
 // Valid reports whether the domain is a valid record name.
 func (r RecordName) Valid() bool {
 	return recordNameRegex.MatchString(r.String())
+}
+
+// Insert will add the given record to RDATA.
+func (r *RData) Insert(record Record) error {
+	recIsCNAME := record.Type == TypeCNAME
+	if r.hasCNAME {
+		errStr := fmt.Sprintf("%v is a CNAME and cannot have any other records", record.Name)
+		return errors.New(errStr)
+	}
+	if recIsCNAME && !r.empty {
+		errStr := fmt.Sprintf("Cannot add CNAME %v, other records cannot exist beside a CNAME", record.Name)
+		return errors.New(errStr)
+	}
+	r.rdata[record.Type] = append((*r).rdata[record.Type], record)
+	r.empty = false
+	r.hasCNAME = recIsCNAME
+	return nil
 }
 
 func (t TXTData) String() string {
@@ -152,17 +195,4 @@ func (t TXTData) String() string {
 		builder.WriteString(string(s))
 	}
 	return builder.String()
-}
-
-func (z Zone) String() string {
-	var s strings.Builder
-	s.WriteString("----------\n")
-	s.WriteString(fmt.Sprintf("ZONE %v\nTTL: %v\nRecords:\n", z.Name, z.TTL))
-	for _, r := range z.Records {
-		// Ideally, this needs printing in a proper tabular format.
-		rStr := fmt.Sprintf("%v\t%v\t%v\t\t\t%v\n", r.Name, r.Type, r.dataString(), r.TTLOrDefault(z))
-		s.WriteString(rStr)
-	}
-	s.WriteString("----------\n")
-	return s.String()
 }

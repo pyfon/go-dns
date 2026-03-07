@@ -21,12 +21,15 @@ func NewParser(l *Lexer, name string) Parser {
 func (p *Parser) Parse() (Zone, error) {
 	zone := NewZone()
 
+	// The zone name MUST be the first line of every zone.
+	zoneNamed := false
+
 	// This loop is effectively ran for every line, as handlers consume the rest of the line.
 parseLoop:
 	for {
 		tok, err := p.Lexer.Next()
 		if err != nil {
-			return Zone{}, err
+			return zone, err
 		}
 
 		switch tok.Type {
@@ -35,8 +38,21 @@ parseLoop:
 			if err != nil {
 				return zone, err
 			}
-			zone.Records[record.Name.String()] = record
+
+			zone.Records.Upsert(record.Name.TrieKey(zone.Name), func(val *RData) error {
+				if !val.Initialised {
+					*val = NewRData()
+				}
+				return val.Insert(record)
+			})
 		case TokenKeyword:
+			if tok.Value == "zone" {
+				if zoneNamed {
+					errStr := fmt.Sprintf("%v Multiple zone keywords in zone file", p.Pos())
+					return zone, errors.New(errStr)
+				}
+				zoneNamed = true
+			}
 			if err := p.handleKeyword(tok, &zone); err != nil {
 				return zone, err
 			}
@@ -46,7 +62,11 @@ parseLoop:
 			break parseLoop
 		default:
 			errStr := fmt.Sprintf("%v Unexpected token: %v", p.Pos(), tok)
-			return Zone{}, errors.New(errStr)
+			return zone, errors.New(errStr)
+		}
+		if !zoneNamed {
+			errStr := fmt.Sprintf("%v Zone name specifier must be at the top of the zone file", p.Pos())
+			return zone, errors.New(errStr)
 		}
 	}
 
@@ -138,12 +158,12 @@ func (p *Parser) parseRecord(nameToken Token) (Record, error) {
 // It will modify zone as required, unless an error occurs, in which case an error will be returned.
 func (p *Parser) handleKeyword(keyword Token, zone *Zone) error {
 	switch keyword.Value {
-	case "zone":
-		return p.handleKWZone(zone)
 	case "ttl":
 		return p.handleKWTTL(zone)
+	case "zone":
+		return p.handleKWZone(zone)
 	default:
-		errStr := fmt.Sprintf("Unexpected keyword token value: %v. This is probably a bug in the lexer.", keyword)
+		errStr := fmt.Sprintf("%v Unexpected keyword token value: %v. This is probably a bug in the lexer.", p.Pos(), keyword)
 		return errors.New(errStr)
 	}
 }
