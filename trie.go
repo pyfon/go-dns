@@ -11,6 +11,7 @@ type Trie[T any] struct {
 type trieNode[T any] struct {
 	value    T
 	children map[string]*trieNode[T]
+	hasValue bool
 }
 
 func NewTrie[T any]() Trie[T] {
@@ -65,7 +66,9 @@ func (t *Trie[T]) findCreateNode(key string) *trieNode[T] {
 
 // Insert will add a value to the node at the given domain. Any existing value will be replaced by the one given.
 func (t *Trie[T]) Insert(key string, value T) {
-	t.findCreateNode(key).value = value
+	node := t.findCreateNode(key)
+	node.value = value
+	node.hasValue = true
 }
 
 // Search will return a pointer to the value for the given key, and a boolean indicating whether the node exists.
@@ -75,10 +78,16 @@ func (t *Trie[T]) Search(key string) (*T, bool) {
 	return &node.value, exists
 }
 
-
-// Upsert will find or create the exact node for the given key, and pass a pointer to its value to function fn.
+// Upsert will find or create the exact node for the given key,
+// and pass a pointer to its value to function fn, and a bool indicating if this node has a value
+// (if an Insert or a successful Upsert has been performed before). If this bool is false,
+// initialisation on the value may need to be performed.
 // Upsert will return any error returned by fn.
-func (t *Trie[T]) Upsert(key string, fn func(val *T) error) error {
+func (t *Trie[T]) Upsert(key string, fn func(val *T, hasValue bool) error) error {
 	node := t.findCreateNode(key)
-	return fn(&node.value)
+	err := fn(&node.value, node.hasValue)
+	if err == nil {
+		node.hasValue = true
+	}
+	return err
 }

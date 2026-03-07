@@ -39,12 +39,15 @@ parseLoop:
 				return zone, err
 			}
 
-			zone.Records.Upsert(record.Name.TrieKey(zone.Name), func(val *RData) error {
-				if !val.Initialised {
+			err = zone.Records.Upsert(record.Name.TrieKey(zone.Name), func(val *RData, hasValue bool) error {
+				if !hasValue {
 					*val = NewRData()
 				}
 				return val.Insert(record)
 			})
+			if err != nil {
+				return zone, err
+			}
 		case TokenKeyword:
 			if tok.Value == "zone" {
 				if zoneNamed {

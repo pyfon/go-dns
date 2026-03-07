@@ -32,16 +32,15 @@ type Record struct {
 }
 
 type Zone struct {
-	Name    Domain            // Domain the zone is responsible for.
-	TTL     uint              // Default TTL in seconds
+	Name    Domain // Domain the zone is responsible for.
+	TTL     uint   // Default TTL in seconds
 	Records Trie[RData]
 }
 
 type RData struct {
-	Initialised bool
-	empty bool
+	empty    bool
 	hasCNAME bool
-	rdata map[RecType][]Record
+	rdata    map[RecType][]Record
 }
 
 // domainRegex defines a regex for a valid domain name. This does NOT include @ and wildcard domains.
@@ -79,10 +78,9 @@ func NewTXTData(data string) TXTData {
 
 func NewRData() RData {
 	return RData{
-		Initialised: true,
-		empty: true,
+		empty:    true,
 		hasCNAME: false,
-		rdata: make(map[RecType][]Record),
+		rdata:    make(map[RecType][]Record),
 	}
 }
 
