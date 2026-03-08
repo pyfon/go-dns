@@ -38,13 +38,7 @@ parseLoop:
 			if err != nil {
 				return zone, err
 			}
-
-			err = zone.Records.Upsert(record.Name.TrieKey(zone.Name), func(val *RData, hasValue bool) error {
-				if !hasValue {
-					*val = NewRData()
-				}
-				return val.Insert(record)
-			})
+			err = zone.Insert(record)
 			if err != nil {
 				return zone, err
 			}

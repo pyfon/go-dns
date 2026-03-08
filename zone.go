@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"iter"
 	"net/netip"
 	"regexp"
 	"strings"
@@ -38,8 +39,8 @@ type Zone struct {
 }
 
 type RData struct {
-	empty    bool
-	hasCNAME bool
+	Empty    bool
+	HasCNAME bool
 	rdata    map[RecType][]Record
 }
 
@@ -78,8 +79,8 @@ func NewTXTData(data string) TXTData {
 
 func NewRData() RData {
 	return RData{
-		empty:    true,
-		hasCNAME: false,
+		Empty:    true,
+		HasCNAME: false,
 		rdata:    make(map[RecType][]Record),
 	}
 }
@@ -105,7 +106,11 @@ func FindBestZoneMatch(zones map[Domain]*Zone, domain Domain) *Zone {
 
 // FQDN reports whether Domain is fully-qualified. It does not check for domain validity.
 func (d Domain) FQDN() bool {
-	return d[len(d)-1:] == "."
+	l := len(d)
+	if l == 0 {
+		return false
+	}
+	return d[l-1:] == "."
 }
 
 // Parent returns the domains parent. For example the parent of a.example.com is "example.com".
@@ -156,39 +161,49 @@ func (r RecordName) String() string {
 	return string(r)
 }
 
-// TrieKey converts r into a key for a Trie[RData].
-// Wildcards simply have a node referenced by "*".
-func (r RecordName) TrieKey(zoneName Domain) string {
-	if r.Root() {
-		return "" // An empty key yields the root node.
-	}
-	return r.String()
-}
-
 // Valid reports whether the domain is a valid record name.
 func (r RecordName) Valid() bool {
 	return recordNameRegex.MatchString(r.String())
 }
 
 // Get will retreive a slice of Records of a given type
-func (r *RData) Get(t RecType) []Record {
-	return r.rdata[t]
+func (r *RData) Get(t RecType) iter.Seq[Record] {
+	return func(yield func(Record) bool) {
+		for _, v := range r.rdata[t] {
+			if !yield(v) {
+				return
+			}
+		}
+	}
+}
+
+// GetAll is an iterator which will return all records in r, one at a time.
+func (r *RData) GetAll() iter.Seq[Record] {
+	return func(yield func(Record) bool) {
+		for _, v := range r.rdata {
+			for _, rec := range v {
+				if !yield(rec) {
+					return
+				}
+			}
+		}
+	}
 }
 
 // Insert will add the given record to RDATA.
 func (r *RData) Insert(record Record) error {
 	recIsCNAME := record.Type == TypeCNAME
-	if r.hasCNAME {
+	if r.HasCNAME {
 		errStr := fmt.Sprintf("%v is a CNAME and cannot have any other records", record.Name)
 		return errors.New(errStr)
 	}
-	if recIsCNAME && !r.empty {
+	if recIsCNAME && !r.Empty {
 		errStr := fmt.Sprintf("Cannot add CNAME %v, other records cannot exist beside a CNAME", record.Name)
 		return errors.New(errStr)
 	}
 	r.rdata[record.Type] = append(r.rdata[record.Type], record)
-	r.empty = false
-	r.hasCNAME = recIsCNAME
+	r.Empty = false
+	r.HasCNAME = recIsCNAME
 	return nil
 }
 
@@ -198,4 +213,48 @@ func (t TXTData) String() string {
 		builder.WriteString(string(s))
 	}
 	return builder.String()
+}
+
+// Query will return a pointer to the RData for the given name. Name is taken to be the subdomain within the zone.
+// E.g. "x" for x.example.com in zone example.com. "" is taken to mean the zone root.
+// If an exact match isn't found, a wildcard lookup will be attempted and returned if successful.
+// Both RData and error will be nil if no match is found.
+func (z *Zone) Query(name Domain) (*RData, error) {
+	if name.FQDN() {
+		return nil, errors.New("Queried name cannot be an FQDN.")
+	}
+
+	nameStr := name.String()
+	rdata, exists := z.Records.Search(nameStr)
+	if exists {
+		return rdata, nil
+	}
+
+	// No exact match, try a wildcard match by replacing the leftmost label with *
+	_, after, _ := strings.Cut(nameStr, ".")
+	sep := "."
+	if after == "" {
+		sep = ""
+	}
+	nameStr = "*" + sep + after
+
+	rdata, exists = z.Records.Search(nameStr)
+	if !exists {
+		rdata = nil
+	}
+	return rdata, nil
+}
+
+// Insert will insert the record into the zone.
+func (z *Zone) Insert(record Record) error {
+	recName := record.Name.String()
+	if record.Name.Root() {
+		recName = "" // An empty key yields the root node.
+	}
+	return z.Records.Upsert(recName, func(val *RData, hasValue bool) error {
+		if !hasValue {
+			*val = NewRData()
+		}
+		return val.Insert(record)
+	})
 }
