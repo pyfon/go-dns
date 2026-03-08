@@ -21,24 +21,23 @@ func Serve(sock net.UDPAddr, zones Trie[Zone]) error {
 
 	for {
 		buf := make([]byte, 512)
-		_, raddr, err := conn.ReadFromUDP(buf)
+		n, raddr, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			log.Errorf("Could not read UDP request: %v", err)
 			continue
 		}
-		go Respond(conn, raddr, buf, &zones)
+		go Handle(conn, raddr, buf[:n], &zones)
 	}
 }
 
-// Respond to a DNS query.
-func Respond(conn *net.UDPConn, raddr *net.UDPAddr, query []byte, zones *Trie[Zone]) {
-	// --- TODO REMOVE ---
-	log.Infof("Received query from %v", raddr)
-	_, err := conn.WriteToUDP([]byte("boo!"), raddr)
+// Handle will handle a connection.
+func Handle(conn *net.UDPConn, raddr *net.UDPAddr, query []byte, zones *Trie[Zone]) {
+	logHead := fmt.Sprintf("[%v]", raddr)
+	response := Respond(query, zones, logHead)
+	_, err := conn.WriteToUDP(response, raddr)
 	if err != nil {
 		log.Errorf("Can't write to socket: %v", err)
 	}
-	// --- TODO REMOVE ---
 }
 
 func (h *SocketList) Set(s string) error {

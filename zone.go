@@ -136,7 +136,7 @@ func (r Record) TTLOrDefault(zone Zone) uint {
 }
 
 // dataString returns a string representation of the data/target/txt depending on the record type.
-func (r Record) dataString() string {
+func (r Record) DataString() string {
 	switch r.Type {
 	case TypeA, TypeAAAA:
 		return r.Addr.String()
@@ -170,6 +170,11 @@ func (r RecordName) Valid() bool {
 	return recordNameRegex.MatchString(r.String())
 }
 
+// Get will retreive a slice of Records of a given type
+func (r *RData) Get(t RecType) []Record {
+	return r.rdata[t]
+}
+
 // Insert will add the given record to RDATA.
 func (r *RData) Insert(record Record) error {
 	recIsCNAME := record.Type == TypeCNAME
@@ -181,7 +186,7 @@ func (r *RData) Insert(record Record) error {
 		errStr := fmt.Sprintf("Cannot add CNAME %v, other records cannot exist beside a CNAME", record.Name)
 		return errors.New(errStr)
 	}
-	r.rdata[record.Type] = append((*r).rdata[record.Type], record)
+	r.rdata[record.Type] = append(r.rdata[record.Type], record)
 	r.empty = false
 	r.hasCNAME = recIsCNAME
 	return nil

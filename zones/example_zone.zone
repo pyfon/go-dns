@@ -5,6 +5,7 @@ ttl 300 ; Zone default
 ; Records have the following syntax:
 ; name  type     data               [optional ttl (seconds)]
 @       A        8.8.8.8
+@       AAAA     ::
 www     CNAME    example.com.
 ftp     AAAA     2001:43fa:800::1   600
 txt     TXT      "hello, \"world haha"
