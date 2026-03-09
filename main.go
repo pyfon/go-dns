@@ -15,7 +15,7 @@ import (
 
 func init() {
 	log.SetOutput(os.Stdout)
-	log.SetLevel(log.InfoLevel) // FIXME: set to info.
+	log.SetLevel(log.InfoLevel)
 }
 
 func main() {
