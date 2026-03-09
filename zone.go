@@ -35,7 +35,7 @@ type Record struct {
 type Zone struct {
 	Name    Domain // Domain the zone is responsible for.
 	TTL     uint   // Default TTL in seconds
-	Records Trie[RData]
+	Records map[string]RData
 }
 
 type RData struct {
@@ -52,7 +52,7 @@ var recordNameRegex *regexp.Regexp = regexp.MustCompile(`^(?:@|\*|(?:\*\.)?(?:[A
 
 func NewZone() Zone {
 	return Zone{
-		Records: NewTrie[RData](),
+		Records: make(map[string]RData),
 	}
 }
 
@@ -215,19 +215,19 @@ func (t TXTData) String() string {
 	return builder.String()
 }
 
-// Query will return a pointer to the RData for the given name. Name is taken to be the subdomain within the zone.
+// Query will return a RData for the given name. Name is taken to be the subdomain within the zone.
 // E.g. "x" for x.example.com in zone example.com. "" is taken to mean the zone root.
 // If an exact match isn't found, a wildcard lookup will be attempted and returned if successful.
-// Both RData and error will be nil if no match is found.
-func (z *Zone) Query(name Domain) (*RData, error) {
+// If no match can be found, the returned bool will be false. If a match is returned the bool will be true.
+func (z *Zone) Query(name Domain) (RData, bool, error) {
 	if name.FQDN() {
-		return nil, errors.New("Queried name cannot be an FQDN.")
+		return RData{}, false, errors.New("Queried name cannot be an FQDN.")
 	}
 
 	nameStr := name.String()
-	rdata, exists := z.Records.Search(nameStr)
-	if exists {
-		return rdata, nil
+	rdata, ok := z.Records[nameStr]
+	if ok {
+		return rdata, true, nil
 	}
 
 	// No exact match, try a wildcard match by replacing the leftmost label with *
@@ -238,11 +238,8 @@ func (z *Zone) Query(name Domain) (*RData, error) {
 	}
 	nameStr = "*" + sep + after
 
-	rdata, exists = z.Records.Search(nameStr)
-	if !exists {
-		rdata = nil
-	}
-	return rdata, nil
+	rdata, ok = z.Records[nameStr]
+	return rdata, ok, nil
 }
 
 // Insert will insert the record into the zone.
@@ -251,10 +248,11 @@ func (z *Zone) Insert(record Record) error {
 	if record.Name.Root() {
 		recName = "" // An empty key yields the root node.
 	}
-	return z.Records.Upsert(recName, func(val *RData, hasValue bool) error {
-		if !hasValue {
-			*val = NewRData()
-		}
-		return val.Insert(record)
-	})
+	val, ok := z.Records[recName]
+	if !ok {
+		val = NewRData()
+	}
+	val.Insert(record)
+	z.Records[recName] = val
+	return nil
 }

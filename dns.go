@@ -41,12 +41,12 @@ func Respond(query []byte, zones *Trie[Zone], logHead string) []byte {
 		search = strings.TrimSuffix(domain.String(), "."+zone.Name.String())
 	}
 
-	rdata, err := zone.Query(Domain(search))
+	rdata, exists, err := zone.Query(Domain(search))
 	if err != nil {
 		msg := fmt.Sprintf("Error when querying zone: %v", err)
 		return []byte(msg)
 	}
-	if rdata == nil {
+	if !exists {
 		return []byte("No results.")
 	}
 
