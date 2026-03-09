@@ -46,6 +46,9 @@ func Respond(query []byte, zones *Trie[Zone], logHead string) []byte {
 		msg := fmt.Sprintf("Error when querying zone: %v", err)
 		return []byte(msg)
 	}
+	if rdata == nil {
+		return []byte("No results.")
+	}
 
 	var response []byte
 	var recIter func() iter.Seq[Record] = rdata.GetAll

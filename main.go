@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -80,6 +81,15 @@ func getZoneFilePaths(zoneDirPath string) ([]string, error) {
 		absPath, err := filepath.Abs(realPath)
 		if err != nil {
 			return err
+		}
+		// Make sure the filename is *.zone
+		base := filepath.Base(absPath)
+		split := strings.Split(base, ".")
+		if len(split) < 2 {
+			return nil
+		}
+		if split[len(split)-1] != "zone" {
+			return nil
 		}
 		files = append(files, absPath)
 		return nil
