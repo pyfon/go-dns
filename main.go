@@ -27,19 +27,16 @@ func main() {
 
 	level, err := log.ParseLevel(*logLevel)
 	if err != nil {
-		log.Errorf("Invalid logLevel given: %v", err)
-		os.Exit(1)
+		argErrf("Invalid logLevel given: %v", err)
 	}
 	log.SetLevel(level)
 
 	if len(*zonePath) <= 0 {
-		log.Errorf("Missing required argument: -zones")
-		os.Exit(1)
+		argErrf("Missing required argument: -zones")
 	}
 
 	if len(sockets) <= 0 {
-		log.Errorf("Missing required argument: -listen")
-		os.Exit(1)
+		argErrf("Missing required argument: -listen")
 	}
 
 	log.Debugf("Parsing zone files in %s", *zonePath)
@@ -66,6 +63,12 @@ func main() {
 		log.Error(err)
 		os.Exit(-1) // TODO use errgroup contexts to exit cleanly!
 	}
+}
+
+func argErrf(format string, args ...any) {
+	log.Errorf(format, args...)
+	flag.Usage()
+	os.Exit(1)
 }
 
 // getFiles returns a list of valid, resolved file paths of all files recursively found under dirPath.
