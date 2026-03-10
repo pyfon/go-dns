@@ -36,8 +36,13 @@ func main() {
 		log.Errorf("Missing required argument: -zones")
 		os.Exit(1)
 	}
-	log.Debugf("Parsing zone files in %s", *zonePath)
 
+	if len(sockets) <= 0 {
+		log.Errorf("Missing required argument: -listen")
+		os.Exit(1)
+	}
+
+	log.Debugf("Parsing zone files in %s", *zonePath)
 	zoneFilePaths, err := getZoneFilePaths(*zonePath)
 	if err != nil {
 		log.Errorf("Couldn't gather zone files in %v: %v", *zonePath, err)
