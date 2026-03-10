@@ -33,7 +33,7 @@ func GenRec(ch chan<- string) {
 func main() {
 	fmt.Printf("zone %s.example.com\nttl 300\n\n", randSeq())
 
-	ch := make(chan string, NUM_RECS*THREADS)
+	ch := make(chan string)
 	var wg sync.WaitGroup
 
 	// Start goroutines
