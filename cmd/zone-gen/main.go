@@ -4,16 +4,11 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
-	"time"
 )
 
 const NUM_RECS = 1_000_000
 const THREADS = 8
 const STRLEN = 12
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyz")
 
