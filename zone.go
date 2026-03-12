@@ -1,12 +1,17 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"iter"
 	"net/netip"
+	"os"
 	"regexp"
+	"path/filepath"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type Domain string
@@ -255,4 +260,78 @@ func (z *Zone) Insert(record Record) error {
 	val.Insert(record)
 	z.Records[recName] = val
 	return nil
+}
+
+// getFiles returns a list of valid, resolved file paths of all files recursively found under dirPath.
+func getZoneFilePaths(zoneDirPath string) ([]string, error) {
+	var files []string
+
+	evalDirEnt := func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		realPath, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			return err
+		}
+		absPath, err := filepath.Abs(realPath)
+		if err != nil {
+			return err
+		}
+		// Make sure the filename is *.zone
+		base := filepath.Base(absPath)
+		split := strings.Split(base, ".")
+		if len(split) < 2 {
+			return nil
+		}
+		if split[len(split)-1] != "zone" {
+			return nil
+		}
+		files = append(files, absPath)
+		return nil
+	}
+
+	if err := filepath.WalkDir(zoneDirPath, evalDirEnt); err != nil {
+		return nil, err
+	}
+
+	return files, nil
+}
+
+// parseZoneFiles takes a list of zone file paths, parses each one into a Zone object,
+// and returns a trie of Zones for fast lookup.
+func parseZoneFiles(zoneDirPath string) (Trie[Zone], error) {
+	log.Debugf("Parsing zone files in %s", zoneDirPath)
+	zoneFiles, err := getZoneFilePaths(zoneDirPath)
+	if err != nil {
+		s := fmt.Sprintf("Couldn't gather zone files in %v: %v", zoneDirPath, err)
+		err := errors.New(s)
+		return Trie[Zone]{}, err
+	}
+
+	var zones map[Domain]Zone = make(map[Domain]Zone)
+	for _, file := range zoneFiles {
+		zoneFile, err := os.Open(file)
+		if err != nil {
+			return NewTrie[Zone](), err
+		}
+		zoneReader := bufio.NewReader(zoneFile)
+		lexer := NewLexer(zoneReader)
+		parser := NewParser(&lexer, filepath.Base(file))
+		zone, err := parser.Parse()
+		zoneFile.Close()
+		if err != nil {
+			return NewTrie[Zone](), err
+		}
+		if _, exists := zones[zone.Name]; exists {
+			errStr := fmt.Sprintf("Duplicate zone: %v", zone.Name)
+			return NewTrie[Zone](), errors.New(errStr)
+		}
+		zones[zone.Name] = zone
+	}
+
+	return NewZoneTrie(zones), nil
 }
