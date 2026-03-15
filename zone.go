@@ -7,8 +7,8 @@ import (
 	"iter"
 	"net/netip"
 	"os"
-	"regexp"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	log "github.com/sirupsen/logrus"

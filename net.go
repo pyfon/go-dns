@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 
@@ -10,7 +11,7 @@ import (
 type SocketList []net.UDPAddr
 
 // Serve DNS on the given socket until program termination.
-func Serve(sock net.UDPAddr, zones Trie[Zone]) error {
+func Serve(sock net.UDPAddr, zones Trie[Zone], ctx context.Context) error {
 	conn, err := net.ListenUDP("udp", &sock)
 	if err != nil {
 		log.Errorf("Could not serve on socket %v: %v", sock, err)

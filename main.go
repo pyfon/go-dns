@@ -1,7 +1,7 @@
 package main
 
 import (
-	//"context"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -30,17 +30,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	var g errgroup.Group
-	//ctx := context.Background()
+	g, ctx := errgroup.WithContext(context.Background())
 	for _, sock := range sockets {
 		g.Go(func() error {
-			return Serve(sock, zones)
+			return Serve(sock, zones, ctx)
 		})
 	}
 
 	if err := g.Wait(); err != nil {
 		log.Error(err)
-		os.Exit(-1) // TODO use errgroup contexts to exit cleanly!
+		os.Exit(-1)
 	}
 }
 
