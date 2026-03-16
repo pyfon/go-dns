@@ -58,13 +58,13 @@ func parseArgs() (sockets SocketList, zonePath string, err error) {
 	log.SetLevel(level)
 
 	if len(zonePath) <= 0 {
-		s := fmt.Sprintf("Missing required argument: -zones")
+		s := "Missing required argument: -zones"
 		err = errors.New(s)
 		return
 	}
 
 	if len(sockets) <= 0 {
-		s := fmt.Sprintf("Missing required argument: -listen")
+		s := "Missing required argument: -listen"
 		err = errors.New(s)
 		return
 	}
