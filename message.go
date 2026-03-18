@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/binary"
 	"errors"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -62,8 +64,8 @@ func parseHeader(buf [12]byte) (Header, error) {
 	header.ID = binary.BigEndian.Uint16(buf[:2])
 
 	flags := binary.BigEndian.Uint16(buf[2:4])
-	header.QR = byte(flags & (1 << 15))
-	header.Opcode = byte(flags & (0xF << 11))
+	header.QR = byte((flags >> 15) & 1)
+	header.Opcode = byte((flags >> 11) & 0xF)
 	header.AA = flags&(1<<10) != 0
 	header.TC = flags&(1<<9) != 0
 	header.RD = flags&(1<<8) != 0
@@ -84,4 +86,65 @@ func parseHeader(buf [12]byte) (Header, error) {
 	}
 
 	return header, nil
+}
+
+// parseQuestion decodes one question from a question section of a DNS message from the start of buf.
+// offset is the length of the parsed question read from buf in bytes.
+func parseQuestion(buf []byte) (question Question, offset uint, err error) {
+	err_small := errors.New("Question buffer is too small")
+	if len(buf) <= 0 {
+		err = err_small
+		return
+	}
+
+	sep := ""
+	for {
+		octets := uint(buf[offset])
+		offset++
+		if octets == 0 { // NULL, end of QNAME.
+			if offset <= 1 {
+				err = errors.New("Invalid question: no QNAME (first byte NULL)")
+				return
+			}
+			break
+		}
+		if uint(len(buf)) <= offset+octets {
+			err = err_small
+			return
+		}
+		label := string(buf[offset : offset+octets])
+		question.Name += sep + label
+		sep = "."
+		offset += octets
+	}
+
+	if uint(len(buf)) < offset+4 { // +4 for QTYPE + QCLASS
+		err = err_small
+		return
+	}
+
+	question.Type = binary.BigEndian.Uint16(buf[offset : offset+2])
+	offset += 2
+	question.Class = binary.BigEndian.Uint16(buf[offset : offset+2])
+	offset += 2
+
+	return
+}
+
+// TODO REMOVE THIS! For dev purposes.
+func LogQuestion(buf []byte) error {
+	if len(buf) < 12 {
+		return errors.New("Request too small")
+	}
+	header, err := parseHeader([12]byte(buf[:12]))
+	if err != nil {
+		return err
+	}
+	question, _, err := parseQuestion(buf[12:])
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Got %v question(s) in request for: %v %v", header.QDCount, question.Name, question.Type)
+	return nil
 }
