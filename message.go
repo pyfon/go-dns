@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
 )
 
 const (
@@ -12,6 +13,7 @@ const (
 	opcodeQuery  byte = 0
 	opcodeIquery byte = 1
 	opcodeStatus byte = 2
+	opcodeMax    byte = 3 // Invalid opcodes start here.
 	// Header response code flags
 	rcodeNoError        byte = 0
 	rcodeFormErr        byte = 1
@@ -19,6 +21,7 @@ const (
 	rcodeNxdomain       byte = 3
 	rcodeNotImplemented byte = 4
 	rcodeRefused        byte = 5
+	rcodeMax            byte = 6 // Invalid rcodes start here.
 )
 
 type Header struct {
@@ -53,7 +56,7 @@ type RR struct {
 	RData    string
 }
 
-func parseHeader(buf [12]byte) Header {
+func parseHeader(buf [12]byte) (Header, error) {
 	var header Header
 
 	header.ID = binary.BigEndian.Uint16(buf[:2])
@@ -75,5 +78,10 @@ func parseHeader(buf [12]byte) Header {
 	header.NSCount = binary.BigEndian.Uint16(buf[8:10])
 	header.ARCount = binary.BigEndian.Uint16(buf[10:12])
 
-	return header
+	if header.Opcode >= opcodeMax || header.Rcode >= rcodeMax {
+		err := errors.New("Invalid OPCODE or RCODE")
+		return header, err
+	}
+
+	return header, nil
 }
