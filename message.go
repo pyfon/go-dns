@@ -131,6 +131,40 @@ func parseQuestion(buf []byte) (question Question, offset uint, err error) {
 	return
 }
 
+func boolToUint16(b bool) uint16 {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// Serialise will convert h into the header of a DNS message payload.
+func (h Header) Serialise() []byte {
+	var payload []byte
+
+	binary.BigEndian.AppendUint16(payload, h.ID)
+
+	var flags uint16
+	flags |= uint16(h.QR) << 15
+	flags |= uint16(h.Opcode) << 11
+	flags |= boolToUint16(h.AA) << 10
+	flags |= boolToUint16(h.TC) << 9
+	flags |= boolToUint16(h.RD) << 8
+	flags |= boolToUint16(h.RA) << 7
+	// --- Reserved zero bit here. ---
+	flags |= boolToUint16(h.AD) << 5
+	flags |= boolToUint16(h.CD) << 4
+	flags |= uint16(h.Rcode)
+	binary.BigEndian.AppendUint16(payload, flags)
+
+	binary.BigEndian.AppendUint16(payload, h.QDCount)
+	binary.BigEndian.AppendUint16(payload, h.ANCount)
+	binary.BigEndian.AppendUint16(payload, h.NSCount)
+	binary.BigEndian.AppendUint16(payload, h.ARCount)
+
+	return payload
+}
+
 // TODO REMOVE THIS! For dev purposes.
 func LogQuestion(buf []byte) error {
 	if len(buf) < 12 {
@@ -140,11 +174,18 @@ func LogQuestion(buf []byte) error {
 	if err != nil {
 		return err
 	}
-	question, _, err := parseQuestion(buf[12:])
-	if err != nil {
-		return err
+
+	var questions []Question
+	for i := 0; i < int(header.QDCount); i++ {
+		question, _, err := parseQuestion(buf[12:])
+		if err != nil {
+			return err
+		}
+		questions = append(questions, question)
 	}
 
-	log.Infof("Got %v question(s) in request for: %v %v", header.QDCount, question.Name, question.Type)
+	for _, question := range questions {
+		log.Infof("Got question: %v %v", question.Name, question.Type)
+	}
 	return nil
 }
