@@ -7,6 +7,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// iota isn't used here for clarity regarding the DNS protocol.
 const (
 	// Header QR flags
 	qrQuery byte = 0
@@ -44,15 +45,15 @@ type Header struct {
 }
 
 type Question struct {
-	Name  string
-	Type  uint16
-	Class uint16
+	Name  Domain
+	Type  RecType
+	Class QClass
 }
 
 type RR struct {
-	Name     string
-	Type     uint16
-	Class    uint16
+	Name     Domain
+	Type     RecType
+	Class    QClass
 	TTL      uint32
 	RDLength uint16
 	RData    string
@@ -113,7 +114,7 @@ func parseQuestion(buf []byte) (question Question, offset uint, err error) {
 			return
 		}
 		label := string(buf[offset : offset+octets])
-		question.Name += sep + label
+		question.Name += Domain(sep + label)
 		sep = "."
 		offset += octets
 	}
@@ -123,10 +124,20 @@ func parseQuestion(buf []byte) (question Question, offset uint, err error) {
 		return
 	}
 
-	question.Type = binary.BigEndian.Uint16(buf[offset : offset+2])
+	question.Type = RecType(binary.BigEndian.Uint16(buf[offset : offset+2]))
 	offset += 2
-	question.Class = binary.BigEndian.Uint16(buf[offset : offset+2])
+	question.Class = QClass(binary.BigEndian.Uint16(buf[offset : offset+2]))
 	offset += 2
+
+	if !question.Name.Valid() {
+		err = errors.New("Invalid Domain in question section")
+	}
+	if !question.Type.Valid() {
+		err = errors.New("Invalid or unsupported record type in question section")
+	}
+	if !question.Class.Valid() {
+		err = errors.New("Invalid or unsupported class in question section")
+	}
 
 	return
 }
@@ -138,10 +149,8 @@ func boolToUint16(b bool) uint16 {
 	return 0
 }
 
-// Serialise will convert h into the header of a DNS message payload.
-func (h Header) Serialise() []byte {
-	var payload []byte
-
+// Serialise will convert h into the header of a DNS message.
+func (h Header) Serialise() (payload []byte) {
 	binary.BigEndian.AppendUint16(payload, h.ID)
 
 	var flags uint16
@@ -163,6 +172,19 @@ func (h Header) Serialise() []byte {
 	binary.BigEndian.AppendUint16(payload, h.ARCount)
 
 	return payload
+}
+
+// Serialise will convert q into a single question of a question section of a DNS message.
+func (q Question) Serialise() (payload []byte) {
+	for _, l := range q.Name.Labels() {
+		payload = append(payload, byte(len(l)))
+		payload = append(payload, []byte(l)...)
+	}
+	payload = append(payload, 0)
+
+	binary.BigEndian.AppendUint16(payload, uint16(q.Type))
+	binary.BigEndian.AppendUint16(payload, uint16(q.Class))
+	return
 }
 
 // TODO REMOVE THIS! For dev purposes.

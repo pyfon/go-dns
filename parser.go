@@ -91,7 +91,10 @@ func (p *Parser) parseRecord(nameToken Token) (Record, error) {
 		errStr := fmt.Sprintf("%v Expected a record type, got unknown value: %v", p.Pos(), recTypeTok)
 		return record, errors.New(errStr)
 	}
-	record.Type = RecType(recTypeTok.Value)
+	record.Type, err = ParseRecType(recTypeTok.Value)
+	if err != nil {
+		return record, err
+	}
 
 	// Data/target field
 	data, err := p.Lexer.Next()

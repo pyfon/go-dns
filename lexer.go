@@ -29,15 +29,6 @@ var Keywords = [...]string{
 	"ttl",
 }
 
-var RecordTypes = [...]RecType{
-	TypeA,
-	TypeAAAA,
-	TypeCNAME,
-	TypeTXT,
-	TypeMX,
-	TypeNS,
-}
-
 type Token struct {
 	Type  TokenType
 	Value string
@@ -161,7 +152,7 @@ func (l *Lexer) parseValue(s string) Token {
 	}
 
 	// TokenRecType
-	if stringIsAny(s, RecordTypes[:]) {
+	if _, err := ParseRecType(s); err == nil {
 		return Token{Type: TokenRecType, Value: s}
 	}
 
