@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"errors"
+	"math"
 	"net/netip"
 
 	log "github.com/sirupsen/logrus"
@@ -57,6 +58,16 @@ type RR struct {
 	Class QClass
 	TTL   uint32
 	RData RData
+}
+
+// serialiseName will serialise a domain into a "name" section of a DNS message.
+func serialiseName(name Domain) (payload []byte) {
+	for _, l := range name.Labels() {
+		payload = append(payload, byte(len(l)))
+		payload = append(payload, []byte(l)...)
+	}
+	payload = append(payload, 0)
+	return
 }
 
 // parseName will parse the "name" section or a domain of a DNS message segment.
@@ -256,14 +267,45 @@ func (h Header) Serialise() (payload []byte) {
 
 // Serialise will convert q into a single question of a question section of a DNS message.
 func (q Question) Serialise() (payload []byte) {
-	for _, l := range q.Name.Labels() {
-		payload = append(payload, byte(len(l)))
-		payload = append(payload, []byte(l)...)
-	}
-	payload = append(payload, 0)
-
+	payload = serialiseName(q.Name)
 	payload = binary.BigEndian.AppendUint16(payload, uint16(q.Type))
 	payload = binary.BigEndian.AppendUint16(payload, uint16(q.Class))
+	return
+}
+
+func (r RData) Serialise() (payload []byte, err error) {
+	switch r.Type {
+	case TypeA, TypeAAAA:
+		payload = r.Addr.AsSlice()
+	case TypeNS, TypeCNAME, TypePTR:
+		payload = serialiseName(r.Target)
+	case TypeMX:
+		payload = binary.BigEndian.AppendUint16(payload, r.Pref)
+		payload = append(payload, serialiseName(r.Target)...)
+	case TypeTXT:
+		payload = []byte(r.TXT.String())
+	default:
+		err = errors.New("Unknown RDATA type")
+	}
+
+	return
+}
+
+func (r RR) Serialise() (payload []byte, err error) {
+	payload = serialiseName(r.Name)
+	payload = binary.BigEndian.AppendUint16(payload, uint16(r.Type))
+	payload = binary.BigEndian.AppendUint16(payload, uint16(r.Class))
+	payload = binary.BigEndian.AppendUint32(payload, r.TTL)
+	rdata, err := r.RData.Serialise()
+	if err != nil {
+		return
+	}
+	if len(rdata) > math.MaxUint16 { // This shouldn't really happen.
+		err = errors.New("RDATA length is too big for a uint16")
+		return
+	}
+	payload = binary.BigEndian.AppendUint16(payload, uint16(len(rdata)))
+	payload = append(payload, rdata...)
 	return
 }
 
