@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"errors"
+	"net/netip"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -51,12 +52,39 @@ type Question struct {
 }
 
 type RR struct {
-	Name     Domain
-	Type     RecType
-	Class    QClass
-	TTL      uint32
-	RDLength uint16
-	RData    string
+	Name  Domain
+	Type  RecType
+	Class QClass
+	TTL   uint32
+	RData RData
+}
+
+// parseName will parse the "name" section or a domain of a DNS message segment.
+// d is the parsed domain, offset is the total length of the name section,
+// i.e. buf[offset] is the start of the next section.
+func parseName(buf []byte) (d Domain, offset uint, err error) {
+	sep := ""
+	for {
+		octets := uint(buf[offset])
+		offset++
+		if octets == 0 { // NULL, end of QNAME.
+			if offset <= 1 {
+				err = errors.New("Invalid question: no QNAME (first byte NULL)")
+				return
+			}
+			break
+		}
+		if uint(len(buf)) <= offset+octets {
+			err = errors.New("Name buffer is too small for domain")
+			return
+		}
+		label := string(buf[offset : offset+octets])
+		d += Domain(sep + label)
+		sep = "."
+		offset += octets
+	}
+
+	return
 }
 
 func parseHeader(buf [12]byte) (Header, error) {
@@ -98,25 +126,9 @@ func parseQuestion(buf []byte) (question Question, offset uint, err error) {
 		return
 	}
 
-	sep := ""
-	for {
-		octets := uint(buf[offset])
-		offset++
-		if octets == 0 { // NULL, end of QNAME.
-			if offset <= 1 {
-				err = errors.New("Invalid question: no QNAME (first byte NULL)")
-				return
-			}
-			break
-		}
-		if uint(len(buf)) <= offset+octets {
-			err = err_small
-			return
-		}
-		label := string(buf[offset : offset+octets])
-		question.Name += Domain(sep + label)
-		sep = "."
-		offset += octets
+	question.Name, offset, err = parseName(buf)
+	if err != nil {
+		return
 	}
 
 	if uint(len(buf)) < offset+4 { // +4 for QTYPE + QCLASS
@@ -142,6 +154,74 @@ func parseQuestion(buf []byte) (question Question, offset uint, err error) {
 	return
 }
 
+func parseRR(buf []byte) (rr RR, offset uint, err error) {
+	err_small := errors.New("RR buffer is too small")
+	if len(buf) <= 0 {
+		err = err_small
+		return
+	}
+
+	rr.Name, offset, err = parseName(buf)
+	if err != nil {
+		return
+	}
+
+	if uint(len(buf)) <= offset+10 {
+		err = err_small
+		return
+	}
+
+	rr.Type = RecType(binary.BigEndian.Uint16(buf[offset : offset+2]))
+	offset += 2
+	rr.Class = QClass(binary.BigEndian.Uint16(buf[offset : offset+2]))
+	offset += 2
+	rr.TTL = binary.BigEndian.Uint32(buf[offset : offset+4])
+	offset += 4
+
+	rdLen := binary.BigEndian.Uint16(buf[offset : offset+2])
+	offset += 2
+
+	if uint(len(buf)) <= offset+uint(rdLen) {
+		err = err_small
+		return
+	}
+
+	rr.RData, err = parseRData(rr.Type, rr.TTL, buf[offset:offset+uint(rdLen)])
+
+	return
+}
+
+func parseRData(t RecType, ttl uint32, buf []byte) (rdata RData, err error) {
+	rdata.Type = t
+	rdata.TTL = uint(ttl)
+
+	switch t {
+	case TypeA:
+		rdata.Addr = netip.AddrFrom4([4]byte(buf))
+	case TypeNS, TypeCNAME, TypePTR:
+		rdata.Target, _, err = parseName(buf)
+	case TypeMX:
+		rdata.Pref = binary.BigEndian.Uint16(buf)
+		rdata.Target, _, err = parseName(buf[2:])
+	case TypeTXT:
+		rdata.TXT = NewTXTData(string(buf))
+	case TypeAAAA:
+		rdata.Addr = netip.AddrFrom16([16]byte(buf))
+	default:
+		err = errors.New("Unknown RDATA type")
+	}
+
+	if err != nil {
+		return
+	}
+	if (t == TypeA || t == TypeAAAA) && !rdata.Addr.IsValid() {
+		err = errors.New("Invalid A/AAAA address in RDATA")
+		return
+	}
+
+	return
+}
+
 func boolToUint16(b bool) uint16 {
 	if b {
 		return 1
@@ -151,7 +231,7 @@ func boolToUint16(b bool) uint16 {
 
 // Serialise will convert h into the header of a DNS message.
 func (h Header) Serialise() (payload []byte) {
-	binary.BigEndian.AppendUint16(payload, h.ID)
+	payload = binary.BigEndian.AppendUint16(payload, h.ID)
 
 	var flags uint16
 	flags |= uint16(h.QR) << 15
@@ -164,12 +244,12 @@ func (h Header) Serialise() (payload []byte) {
 	flags |= boolToUint16(h.AD) << 5
 	flags |= boolToUint16(h.CD) << 4
 	flags |= uint16(h.Rcode)
-	binary.BigEndian.AppendUint16(payload, flags)
+	payload = binary.BigEndian.AppendUint16(payload, flags)
 
-	binary.BigEndian.AppendUint16(payload, h.QDCount)
-	binary.BigEndian.AppendUint16(payload, h.ANCount)
-	binary.BigEndian.AppendUint16(payload, h.NSCount)
-	binary.BigEndian.AppendUint16(payload, h.ARCount)
+	payload = binary.BigEndian.AppendUint16(payload, h.QDCount)
+	payload = binary.BigEndian.AppendUint16(payload, h.ANCount)
+	payload = binary.BigEndian.AppendUint16(payload, h.NSCount)
+	payload = binary.BigEndian.AppendUint16(payload, h.ARCount)
 
 	return payload
 }
@@ -182,8 +262,8 @@ func (q Question) Serialise() (payload []byte) {
 	}
 	payload = append(payload, 0)
 
-	binary.BigEndian.AppendUint16(payload, uint16(q.Type))
-	binary.BigEndian.AppendUint16(payload, uint16(q.Class))
+	payload = binary.BigEndian.AppendUint16(payload, uint16(q.Type))
+	payload = binary.BigEndian.AppendUint16(payload, uint16(q.Class))
 	return
 }
 

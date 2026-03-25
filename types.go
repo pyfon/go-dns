@@ -2,20 +2,16 @@ package main
 
 import (
 	"fmt"
+	"net/netip"
 	"regexp"
 	"strings"
 )
-
-type Domain string
-type RecType uint16
-type QClass uint16
 
 // These RecType values correspond to the DNS message values for the given type.
 const (
 	TypeA     RecType = 1
 	TypeNS    RecType = 2
 	TypeCNAME RecType = 5
-	TypeSOA   RecType = 6
 	TypePTR   RecType = 12
 	TypeMX    RecType = 15
 	TypeTXT   RecType = 16
@@ -26,6 +22,20 @@ const (
 	QClassIN QClass = 1
 )
 
+type Domain string
+type RecType uint16
+type QClass uint16
+
+type RData struct {
+	Name   RecordName
+	Type   RecType
+	Addr   netip.Addr // A, AAAA
+	Target Domain     // For CNAMEs, MX etc
+	TXT    TXTData    // TXT, split into 255-byte strings
+	TTL    uint       // Seconds
+	Pref   uint16     // For MX
+}
+
 // domainRegex defines a regex for a valid domain name. This does NOT include @ and wildcard domains.
 var domainRegex *regexp.Regexp = regexp.MustCompile(`^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.?)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]\.?$`)
 
@@ -33,7 +43,6 @@ var recTypeByName = map[string]RecType{
 	"A":     TypeA,
 	"NS":    TypeNS,
 	"CNAME": TypeCNAME,
-	"SOA":   TypeSOA,
 	"PTR":   TypePTR,
 	"MX":    TypeMX,
 	"TXT":   TypeTXT,
@@ -95,9 +104,30 @@ func (q QClass) String() string {
 	return ""
 }
 
+// TTLOrDefault returns the TTL of the record, falling back to the default of zone if new TTL was specified
+func (r RData) TTLOrDefault(zone Zone) uint {
+	if r.TTL == 0 {
+		return zone.TTL
+	}
+	return r.TTL
+}
+
+// dataString returns a string representation of the data/target/txt depending on the record type.
+func (r RData) DataString() string {
+	switch r.Type {
+	case TypeA, TypeAAAA:
+		return r.Addr.String()
+	case TypeCNAME, TypeMX, TypeNS:
+		return r.Target.String()
+	case TypeTXT:
+		return r.TXT.String()
+	}
+	return ""
+}
+
 func (r RecType) Valid() bool {
 	switch r {
-	case TypeA, TypeNS, TypeCNAME, TypeSOA, TypePTR, TypeMX, TypeTXT, TypeAAAA:
+	case TypeA, TypeNS, TypeCNAME, TypePTR, TypeMX, TypeTXT, TypeAAAA:
 		return true
 	}
 	return false
@@ -111,8 +141,6 @@ func (r RecType) String() string {
 		return "NS"
 	case TypeCNAME:
 		return "CNAME"
-	case TypeSOA:
-		return "SOA"
 	case TypePTR:
 		return "PTR"
 	case TypeMX:

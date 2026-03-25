@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"iter"
-	"net/netip"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -17,25 +16,16 @@ import (
 type RecordName string // E.g. wow.example, *.example for zone "com."
 type TXTData [][]byte
 
-type Record struct {
-	Name   RecordName
-	Type   RecType
-	Addr   netip.Addr // A, AAAA
-	Target Domain     // For CNAMEs, MX etc
-	TXT    TXTData    // TXT, split into 255-byte strings.
-	TTL    uint       // Seconds
-}
-
 type Zone struct {
 	Name    Domain // Domain the zone is responsible for.
 	TTL     uint   // Default TTL in seconds
-	Records map[string]RData
+	Records map[string]RRSet
 }
 
-type RData struct {
+type RRSet struct {
 	Empty    bool
 	HasCNAME bool
-	rdata    map[RecType][]Record
+	RRSet    map[RecType][]RData
 }
 
 // Matches valid record names like "example" and "*.example", "@"
@@ -43,7 +33,7 @@ var recordNameRegex *regexp.Regexp = regexp.MustCompile(`^(?:@|\*|(?:\*\.)?(?:[A
 
 func NewZone() Zone {
 	return Zone{
-		Records: make(map[string]RData),
+		Records: make(map[string]RRSet),
 	}
 }
 
@@ -68,33 +58,12 @@ func NewTXTData(data string) TXTData {
 	return TXTData(out)
 }
 
-func NewRData() RData {
-	return RData{
+func NewRRSet() RRSet {
+	return RRSet{
 		Empty:    true,
 		HasCNAME: false,
-		rdata:    make(map[RecType][]Record),
+		RRSet:    make(map[RecType][]RData),
 	}
-}
-
-// TTLOrDefault returns the TTL of the record, falling back to the default of zone if new TTL was specified
-func (r Record) TTLOrDefault(zone Zone) uint {
-	if r.TTL == 0 {
-		return zone.TTL
-	}
-	return r.TTL
-}
-
-// dataString returns a string representation of the data/target/txt depending on the record type.
-func (r Record) DataString() string {
-	switch r.Type {
-	case TypeA, TypeAAAA:
-		return r.Addr.String()
-	case TypeCNAME, TypeMX, TypeNS:
-		return r.Target.String()
-	case TypeTXT:
-		return r.TXT.String()
-	}
-	return ""
 }
 
 func (r RecordName) Root() bool {
@@ -111,9 +80,9 @@ func (r RecordName) Valid() bool {
 }
 
 // Get will retreive a slice of Records of a given type
-func (r *RData) Get(t RecType) iter.Seq[Record] {
-	return func(yield func(Record) bool) {
-		for _, v := range r.rdata[t] {
+func (r *RRSet) Get(t RecType) iter.Seq[RData] {
+	return func(yield func(RData) bool) {
+		for _, v := range r.RRSet[t] {
 			if !yield(v) {
 				return
 			}
@@ -122,9 +91,9 @@ func (r *RData) Get(t RecType) iter.Seq[Record] {
 }
 
 // GetAll is an iterator which will return all records in r, one at a time.
-func (r *RData) GetAll() iter.Seq[Record] {
-	return func(yield func(Record) bool) {
-		for _, v := range r.rdata {
+func (r *RRSet) GetAll() iter.Seq[RData] {
+	return func(yield func(RData) bool) {
+		for _, v := range r.RRSet {
 			for _, rec := range v {
 				if !yield(rec) {
 					return
@@ -134,8 +103,8 @@ func (r *RData) GetAll() iter.Seq[Record] {
 	}
 }
 
-// Insert will add the given record to RDATA.
-func (r *RData) Insert(record Record) error {
+// Insert will add the given record to RRSet.
+func (r *RRSet) Insert(record RData) error {
 	recIsCNAME := record.Type == TypeCNAME
 	if r.HasCNAME {
 		errStr := fmt.Sprintf("%v is a CNAME and cannot have any other records", record.Name)
@@ -145,7 +114,7 @@ func (r *RData) Insert(record Record) error {
 		errStr := fmt.Sprintf("Cannot add CNAME %v, other records cannot exist beside a CNAME", record.Name)
 		return errors.New(errStr)
 	}
-	r.rdata[record.Type] = append(r.rdata[record.Type], record)
+	r.RRSet[record.Type] = append(r.RRSet[record.Type], record)
 	r.Empty = false
 	r.HasCNAME = recIsCNAME
 	return nil
@@ -159,19 +128,19 @@ func (t TXTData) String() string {
 	return builder.String()
 }
 
-// Query will return a RData for the given name. Name is taken to be the subdomain within the zone.
+// Query will return a RRSet for the given name. Name is taken to be the subdomain within the zone.
 // E.g. "x" for x.example.com in zone example.com. "" is taken to mean the zone root.
 // If an exact match isn't found, a wildcard lookup will be attempted and returned if successful.
 // If no match can be found, the returned bool will be false. If a match is returned the bool will be true.
-func (z *Zone) Query(name Domain) (RData, bool, error) {
+func (z *Zone) Query(name Domain) (RRSet, bool, error) {
 	if name.FQDN() {
-		return RData{}, false, errors.New("Queried name cannot be an FQDN.")
+		return RRSet{}, false, errors.New("Queried name cannot be an FQDN.")
 	}
 
 	nameStr := name.String()
-	rdata, ok := z.Records[nameStr]
+	RRSet, ok := z.Records[nameStr]
 	if ok {
-		return rdata, true, nil
+		return RRSet, true, nil
 	}
 
 	// No exact match, try a wildcard match by replacing the leftmost label with *
@@ -182,19 +151,19 @@ func (z *Zone) Query(name Domain) (RData, bool, error) {
 	}
 	nameStr = "*" + sep + after
 
-	rdata, ok = z.Records[nameStr]
-	return rdata, ok, nil
+	RRSet, ok = z.Records[nameStr]
+	return RRSet, ok, nil
 }
 
 // Insert will insert the record into the zone.
-func (z *Zone) Insert(record Record) error {
+func (z *Zone) Insert(record RData) error {
 	recName := record.Name.String()
 	if record.Name.Root() {
 		recName = "" // An empty key yields the root node.
 	}
 	val, ok := z.Records[recName]
 	if !ok {
-		val = NewRData()
+		val = NewRRSet()
 	}
 	val.Insert(record)
 	z.Records[recName] = val

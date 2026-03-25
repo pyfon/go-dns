@@ -71,8 +71,8 @@ parseLoop:
 }
 
 // parseRecord will parse a record line, starting with the domain name given, and return a corrisponding Record.
-func (p *Parser) parseRecord(nameToken Token) (Record, error) {
-	var record Record
+func (p *Parser) parseRecord(nameToken Token) (RData, error) {
+	var record RData
 
 	// Name (domain) field
 	name := RecordName(nameToken.Value)
