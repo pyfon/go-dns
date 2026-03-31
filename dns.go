@@ -13,7 +13,7 @@ func Respond(queryBuf []byte, zones *Trie[Zone], logHead string) []byte {
 	query, err := ParseDNSMsg(queryBuf)
 	if err != nil {
 		log.Errorf("%v Error when parsing request: %v", logHead, err)
-		return errReply(query, rcodeFormErr)
+		return errReply(query, rcodeFormErr, logHead)
 	}
 
 	var answers map[Domain]RData
@@ -25,11 +25,11 @@ func Respond(queryBuf []byte, zones *Trie[Zone], logHead string) []byte {
 		rrset, found, err := zone.Query(Domain(subdomain))
 		if err != nil {
 			log.Errorf("%v Error when querying zone, returning SERVFAIL: %v", logHead, err)
-			return errReply(query, rcodeServFail)
+			return errReply(query, rcodeServFail, logHead)
 		}
 		if !found {
 			log.Infof("%v Could not find answer to query %v, returning NXDOMAIN", logHead, q.Name)
-			return errReply(query, rcodeNxdomain)
+			return errReply(query, rcodeNxdomain, logHead)
 		}
 		for rdata := range rrset.Get(q.Type) {
 			answers[Domain(rdata.Name)] = rdata
@@ -39,24 +39,24 @@ func Respond(queryBuf []byte, zones *Trie[Zone], logHead string) []byte {
 	replyMsg, err := NewDNSMsg(query, answers)
 	if err != nil {
 		log.Errorf("%v Error when constructing NewDNSMsg for reply: %v", logHead, err)
-		return errReply(query, rcodeServFail)
+		return errReply(query, rcodeServFail, logHead)
 	}
 
 	reply, err := replyMsg.Serialise()
 	if err != nil {
 		log.Errorf("%v Could not serialise reply: %v", logHead, err)
-		return errReply(query, rcodeServFail)
+		return errReply(query, rcodeServFail, logHead)
 	}
 
 	return reply
 }
 
 // errReply constructs a serialised error response.
-func errReply(orig DNSMsg, rcode byte) []byte {
+func errReply(orig DNSMsg, rcode byte, logHead string) []byte {
 	reply := NewDNSMsgErr(orig, rcode)
 	payload, err := reply.Serialise()
 	if err != nil {
-		log.Errorf("%v BUG? Error when serialising error reply: %v. Replying with NULL", err)
+		log.Errorf("%v BUG? Error when serialising error reply: %v. Replying with NULL", logHead, err)
 		return []byte("")
 	}
 	return payload
