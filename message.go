@@ -5,8 +5,6 @@ import (
 	"errors"
 	"math"
 	"net/netip"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // iota isn't used here for clarity regarding the DNS protocol.
@@ -21,11 +19,11 @@ const (
 	opcodeMax    byte = 3 // Invalid opcodes start here.
 	// Header response code flags
 	rcodeNoError        byte = 0
-	rcodeFormErr        byte = 1
-	rcodeServFail       byte = 2
-	rcodeNxdomain       byte = 3
+	rcodeFormErr        byte = 1 // Format error - The name server was unable to interpret the query.
+	rcodeServFail       byte = 2 // Server failure - The name server was unable to process this query due to a problem with the name server.
+	rcodeNxdomain       byte = 3 // Name Error - signifies that the domain name referenced in the query does not exist.
 	rcodeNotImplemented byte = 4
-	rcodeRefused        byte = 5
+	rcodeRefused        byte = 5 // Server is refusing to answer
 	rcodeMax            byte = 6 // Invalid rcodes start here.
 )
 
@@ -58,6 +56,125 @@ type RR struct {
 	Class QClass
 	TTL   uint32
 	RData RData
+}
+
+type DNSMsg struct {
+	Header     Header
+	Question   []Question
+	Answer     []RR
+	Authority  []RR
+	Additional []RR
+}
+
+// ParseDNSMsg will construct a DNSMsg from a binary DNS message payload.
+func ParseDNSMsg(buf []byte) (msg DNSMsg, err error) {
+	// Header
+	headerBuf := [12]byte(buf)
+	buf = buf[12:]
+	msg.Header, err = parseHeader(headerBuf)
+	if err != nil {
+		return
+	}
+	// Question
+	var offset uint
+	for i := 0; i < int(msg.Header.QDCount); i++ {
+		q, offset, err := parseQuestion(buf)
+		if err != nil {
+			return msg, err
+		}
+		msg.Question = append(msg.Question, q)
+		buf = buf[offset:]
+	}
+	// Answer
+	msg.Answer, offset, err = parseRRs(buf, msg.Header.ANCount)
+	if err != nil {
+		return
+	}
+	buf = buf[offset:]
+	// Authority
+	msg.Authority, offset, err = parseRRs(buf, msg.Header.NSCount)
+	if err != nil {
+		return
+	}
+	buf = buf[offset:]
+	// Additional
+	msg.Additional, offset, err = parseRRs(buf, msg.Header.ARCount)
+	return
+}
+
+// parseRRs parses numRRs RRs from a DNS message.
+// offset is the length of the parsed RRs read from buf in bytes.
+func parseRRs(buf []byte, numRRs uint16) (rrs []RR, offset uint, err error) {
+	for i := 0; i < int(numRRs); i++ {
+		rr, thisOffset, err := parseRR(buf)
+		if err != nil {
+			return rrs, offset, err
+		}
+		rrs = append(rrs, rr)
+		offset += thisOffset
+	}
+	return
+}
+
+// NewDNSMsg constructs a no-error reply DNSMsg given an original query and answer Rdata,
+// mapped by the original queried domain.
+func NewDNSMsg(original DNSMsg, answers map[Domain]RData) (reply DNSMsg, err error) {
+	if len(answers) > math.MaxUint16 { // Unlikely, but...
+		err = errors.New("Too many answers given")
+		return
+	}
+	reply.Header = Header{
+		ID:      original.Header.ID,
+		QR:      qrReply,
+		Opcode:  original.Header.Opcode,
+		AA:      true, // We're an authoritive-only DNS server.
+		Rcode:   rcodeNoError,
+		ANCount: uint16(len(answers)),
+	}
+	for domain, rdata := range answers {
+		reply.Answer = append(reply.Answer, rdata.RR(domain))
+	}
+	return
+}
+
+// NewDNSMsgErr constructs a reply DNSMsg from an original query which contains the error RCode given.
+func NewDNSMsgErr(original DNSMsg, rcode byte) DNSMsg {
+	header := Header{
+		ID:     original.Header.ID,
+		QR:     qrReply,
+		Opcode: original.Header.Opcode,
+		AA:     true,
+		Rcode:  rcode,
+	}
+	return DNSMsg{Header: header}
+}
+
+// Serialise will serialise a DNSMsg into a binary DNS Message payload.
+func (m DNSMsg) Serialise() ([]byte, error) {
+	var payload []byte
+	payload = append(payload, m.Header.Serialise()...)
+	for _, q := range m.Question {
+		payload = append(payload, q.Serialise()...)
+	}
+	for _, rr := range m.Answer {
+		bin, err := rr.Serialise()
+		if err != nil {
+			return payload, err
+		}
+		payload = append(payload, bin...)
+	}
+	return payload, nil
+}
+
+// RR converts r into an RR. name must be given, as an RData RecordName could contain ambiguous wildcards, etc.
+func (r RData) RR(name Domain) RR {
+	return RR{
+		Name:  name,
+		Type:  r.Type,
+		Class: QClassIN,
+		TTL:   uint32(r.TTL),
+		RData: r,
+	}
 }
 
 // serialiseName will serialise a domain into a "name" section of a DNS message.
@@ -307,29 +424,4 @@ func (r RR) Serialise() (payload []byte, err error) {
 	payload = binary.BigEndian.AppendUint16(payload, uint16(len(rdata)))
 	payload = append(payload, rdata...)
 	return
-}
-
-// TODO REMOVE THIS! For dev purposes.
-func LogQuestion(buf []byte) error {
-	if len(buf) < 12 {
-		return errors.New("Request too small")
-	}
-	header, err := parseHeader([12]byte(buf[:12]))
-	if err != nil {
-		return err
-	}
-
-	var questions []Question
-	for i := 0; i < int(header.QDCount); i++ {
-		question, _, err := parseQuestion(buf[12:])
-		if err != nil {
-			return err
-		}
-		questions = append(questions, question)
-	}
-
-	for _, question := range questions {
-		log.Infof("Got question: %v %v", question.Name, question.Type)
-	}
-	return nil
 }
