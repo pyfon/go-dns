@@ -24,7 +24,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	zones, err := parseZoneFiles(zoneDirPath)
+	zones, err := ParseZoneFiles(zoneDirPath)
 	if err != nil {
 		log.Errorf("Could not parse zone files: %v", err)
 		os.Exit(1)

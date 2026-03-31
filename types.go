@@ -53,6 +53,14 @@ var qClassByName = map[string]QClass{
 	"IN": QClassIN,
 }
 
+// AsFQDN converts d into an FQDN (adds a "." suffix if not present)
+func (d Domain) AsFQDN() Domain {
+	if d.FQDN() {
+		return d
+	}
+	return d + "."
+}
+
 // FQDN reports whether Domain is fully-qualified. It does not check for domain validity.
 func (d Domain) FQDN() bool {
 	l := len(d)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -15,39 +16,44 @@ func Respond(queryBuf []byte, zones *Trie[Zone], logHead string) []byte {
 		log.Errorf("%v Error when parsing request: %v", logHead, err)
 		return errReply(query, rcodeFormErr, logHead)
 	}
+	// For logging purposes:
+	qInfo := queryInfo(query)
 
-	var answers map[Domain]RData
-	log.Debugf("%v Query contains %v questions", logHead, len(query.Question))
+	answers := make(map[Domain]RData)
 	for _, q := range query.Question {
-		zone, _ := zones.Search(q.Name.String())
-		subdomain, _ := strings.CutSuffix(q.Name.String(), "."+zone.Name.String())
-		log.Debugf("%v Querying zone %v for record %v", logHead, zone.Name, subdomain)
-		rrset, found, err := zone.Query(Domain(subdomain))
+		zone, _ := zones.Search(q.Name.AsFQDN().String())
+		rrset, found, err := zone.Query(queryStr(zone, q.Name))
 		if err != nil {
-			log.Errorf("%v Error when querying zone, returning SERVFAIL: %v", logHead, err)
+			log.Errorf("%v Error when querying zone for query %v, returning SERVFAIL: %v", logHead, qInfo, err)
 			return errReply(query, rcodeServFail, logHead)
 		}
 		if !found {
-			log.Infof("%v Could not find answer to query %v, returning NXDOMAIN", logHead, q.Name)
+			log.Infof("%v [NXDOMAIN] %v", logHead, qInfo)
 			return errReply(query, rcodeNxdomain, logHead)
 		}
-		for rdata := range rrset.Get(q.Type) {
-			answers[Domain(rdata.Name)] = rdata
+		// Could we improve this to make it recursive? :
+		ty := q.Type
+		if rrset.HasCNAME {
+			ty = TypeCNAME
+		}
+		for rdata := range rrset.Get(ty) {
+			answers[Domain(q.Name)] = rdata
 		}
 	}
 
 	replyMsg, err := NewDNSMsg(query, answers)
 	if err != nil {
-		log.Errorf("%v Error when constructing NewDNSMsg for reply: %v", logHead, err)
+		log.Errorf("%v Error when constructing NewDNSMsg for reply to %v: %v", logHead, qInfo, err)
 		return errReply(query, rcodeServFail, logHead)
 	}
 
 	reply, err := replyMsg.Serialise()
 	if err != nil {
-		log.Errorf("%v Could not serialise reply: %v", logHead, err)
+		log.Errorf("%v Could not serialise reply to %v: %v", logHead, qInfo, err)
 		return errReply(query, rcodeServFail, logHead)
 	}
 
+	log.Infof("%v [NoError] %v", logHead, qInfo)
 	return reply
 }
 
@@ -60,4 +66,25 @@ func errReply(orig DNSMsg, rcode byte, logHead string) []byte {
 		return []byte("")
 	}
 	return payload
+}
+
+// queryInfo returns a string which describes a DNS query, for logging purposes.
+func queryInfo(msg DNSMsg) string {
+	var s string
+	sep := ""
+	for _, q := range msg.Question {
+		s = fmt.Sprintf("%vName: %v Type: %v%v", s, q.Name, q.Type.String(), sep)
+		sep = " | "
+	}
+	return s
+}
+
+// queryStr returns the appropriate query key to use to search for the (absolute) name given in zone.
+func queryStr(zone *Zone, name Domain) Domain {
+	nameFQDN := name.AsFQDN()
+	if nameFQDN == zone.Name {
+		return ""
+	}
+	key, _ := strings.CutSuffix(nameFQDN.String(), "."+zone.Name.String())
+	return Domain(key)
 }

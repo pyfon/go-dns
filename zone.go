@@ -230,7 +230,8 @@ func getZoneFilePaths(zoneDirPath string) ([]string, error) {
 
 // parseZoneFiles takes a list of zone file paths, parses each one into a Zone object,
 // and returns a trie of Zones for fast lookup.
-func parseZoneFiles(zoneDirPath string) (Trie[Zone], error) {
+// Please note the returned Trie should be searched via FQDN, as the root zone is "".
+func ParseZoneFiles(zoneDirPath string) (Trie[Zone], error) {
 	log.Debugf("Parsing zone files in %s", zoneDirPath)
 	zoneFiles, err := getZoneFilePaths(zoneDirPath)
 	if err != nil {
