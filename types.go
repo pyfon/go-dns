@@ -8,6 +8,7 @@ import (
 )
 
 // These RecType values correspond to the DNS message values for the given type.
+// To add another type, just add one of these const values and an entry to recTypeToName.
 const (
 	TypeA     RecType = 1
 	TypeNS    RecType = 2
@@ -16,6 +17,7 @@ const (
 	TypeMX    RecType = 15
 	TypeTXT   RecType = 16
 	TypeAAAA  RecType = 28
+	TypeOPT   RecType = 41
 )
 
 const (
@@ -39,14 +41,15 @@ type RData struct {
 // domainRegex defines a regex for a valid domain name. This does NOT include @ and wildcard domains.
 var domainRegex *regexp.Regexp = regexp.MustCompile(`^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.?)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]\.?$`)
 
-var recTypeByName = map[string]RecType{
-	"A":     TypeA,
-	"NS":    TypeNS,
-	"CNAME": TypeCNAME,
-	"PTR":   TypePTR,
-	"MX":    TypeMX,
-	"TXT":   TypeTXT,
-	"AAAA":  TypeAAAA,
+var recTypeToName = map[RecType]string{
+	TypeA:     "A",
+	TypeNS:    "NS",
+	TypeCNAME: "CNAME",
+	TypePTR:   "PTR",
+	TypeMX:    "MX",
+	TypeTXT:   "TXT",
+	TypeAAAA:  "AAAA",
+	TypeOPT:   "OPT",
 }
 
 var qClassByName = map[string]QClass{
@@ -134,29 +137,17 @@ func (r RData) DataString() string {
 }
 
 func (r RecType) Valid() bool {
-	switch r {
-	case TypeA, TypeNS, TypeCNAME, TypePTR, TypeMX, TypeTXT, TypeAAAA:
-		return true
+	for k, _ := range recTypeToName {
+		if k == r {
+			return true
+		}
 	}
 	return false
 }
 
 func (r RecType) String() string {
-	switch r {
-	case TypeA:
-		return "A"
-	case TypeNS:
-		return "NS"
-	case TypeCNAME:
-		return "CNAME"
-	case TypePTR:
-		return "PTR"
-	case TypeMX:
-		return "MX"
-	case TypeTXT:
-		return "TXT"
-	case TypeAAAA:
-		return "AAAA"
+	if s, ok := recTypeToName[r]; ok {
+		return s
 	}
 	return ""
 }
@@ -171,8 +162,10 @@ func ParseQClass(s string) (QClass, error) {
 
 // ParseRecType converts a string to a RecType.
 func ParseRecType(s string) (RecType, error) {
-	if t, ok := recTypeByName[s]; ok {
-		return t, nil
+	for k, v := range recTypeToName {
+		if s == v {
+			return k, nil
+		}
 	}
 	return 0, fmt.Errorf("Unknown record type: %q", s)
 }

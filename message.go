@@ -196,10 +196,6 @@ func parseName(buf []byte) (d Domain, offset uint, err error) {
 		octets := uint(buf[offset])
 		offset++
 		if octets == 0 { // NULL, end of QNAME.
-			if offset <= 1 {
-				err = errors.New("Invalid question: no QNAME (first byte NULL)")
-				return
-			}
 			break
 		}
 		if uint(len(buf)) <= offset+octets {
@@ -294,7 +290,7 @@ func parseRR(buf []byte) (rr RR, offset uint, err error) {
 		return
 	}
 
-	if uint(len(buf)) <= offset+10 {
+	if uint(len(buf)) < offset+10 {
 		err = err_small
 		return
 	}
@@ -309,7 +305,7 @@ func parseRR(buf []byte) (rr RR, offset uint, err error) {
 	rdLen := binary.BigEndian.Uint16(buf[offset : offset+2])
 	offset += 2
 
-	if uint(len(buf)) <= offset+uint(rdLen) {
+	if uint(len(buf)) < offset+uint(rdLen) {
 		err = err_small
 		return
 	}
@@ -320,6 +316,11 @@ func parseRR(buf []byte) (rr RR, offset uint, err error) {
 }
 
 func parseRData(t RecType, ttl uint32, buf []byte) (rdata RData, err error) {
+	if !t.Valid() {
+		err = errors.New("Unknown RDATA type")
+		return
+	}
+
 	rdata.Type = t
 	rdata.TTL = uint(ttl)
 
@@ -335,8 +336,6 @@ func parseRData(t RecType, ttl uint32, buf []byte) (rdata RData, err error) {
 		rdata.TXT = NewTXTData(string(buf))
 	case TypeAAAA:
 		rdata.Addr = netip.AddrFrom16([16]byte(buf))
-	default:
-		err = errors.New("Unknown RDATA type")
 	}
 
 	if err != nil {
