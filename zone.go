@@ -103,6 +103,15 @@ func (r *RRSet) GetAll() iter.Seq[RData] {
 	}
 }
 
+// CNAME will yield the CNAME RDATA of r, as long as r is a CNAME.
+func (r *RRSet) CNAME() RData {
+	if !r.HasCNAME {
+		log.Errorf("GetCNAME() called when RRSet is not a CNAME")
+		return RData{}
+	}
+	return r.RRSet[TypeCNAME][0]
+}
+
 // Insert will add the given record to RRSet.
 func (r *RRSet) Insert(record RData) error {
 	recIsCNAME := record.Type == TypeCNAME

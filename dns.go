@@ -16,45 +16,71 @@ func Respond(queryBuf []byte, zones *Trie[Zone], logHead string) []byte {
 		log.Errorf("%v Error when parsing request: %v", logHead, err)
 		return errReply(query, rcodeFormErr, logHead)
 	}
-	// For logging purposes:
-	qInfo := queryInfo(query)
 
-	answers := make(map[Domain]RData)
+	logHead = fmt.Sprintf("%s [%s]", logHead, queryInfo(query))
+
+	answers := make(map[Domain][]RData)
 	for _, q := range query.Question {
-		zone, _ := zones.Search(q.Name.AsFQDN().String())
-		rrset, found, err := zone.Query(queryStr(zone, q.Name))
-		if err != nil {
-			log.Errorf("%v Error when querying zone for query %v, returning SERVFAIL: %v", logHead, qInfo, err)
-			return errReply(query, rcodeServFail, logHead)
+		a, ok, errMsg := answer(q, zones, query, logHead)
+		if !ok {
+			return errMsg
 		}
-		if !found {
-			log.Infof("%v [NXDOMAIN] %v", logHead, qInfo)
-			return errReply(query, rcodeNxdomain, logHead)
-		}
-		// Could we improve this to make it recursive? :
-		ty := q.Type
-		if rrset.HasCNAME {
-			ty = TypeCNAME
-		}
-		for rdata := range rrset.Get(ty) {
-			answers[Domain(q.Name)] = rdata
-		}
+		answers[q.Name] = append(answers[q.Name], a...)
 	}
 
 	replyMsg, err := NewDNSMsg(query, answers)
 	if err != nil {
-		log.Errorf("%v Error when constructing NewDNSMsg for reply to %v: %v", logHead, qInfo, err)
+		log.Errorf("%v Error when constructing NewDNSMsg for reply: %v", logHead, err)
 		return errReply(query, rcodeServFail, logHead)
 	}
 
 	reply, err := replyMsg.Serialise()
 	if err != nil {
-		log.Errorf("%v Could not serialise reply to %v: %v", logHead, qInfo, err)
+		log.Errorf("%v Could not serialise reply: %v", logHead, err)
 		return errReply(query, rcodeServFail, logHead)
 	}
 
-	log.Infof("%v [NoError] %v", logHead, qInfo)
+	log.Infof("%v [NoError]", logHead)
 	return reply
+}
+
+// answer attempts to recursively answer one question using all the given zones.
+// If an answer was found, ok will be true and the answers will be returned.
+// Else, ok will be false, and an error reply DNS message will be given.
+func answer(q Question, zones *Trie[Zone], orig DNSMsg, logHead string) (answers []RData, ok bool, errMsg []byte) {
+	zone, _ := zones.Search(q.Name.AsFQDN().String())
+	rrset, found, err := zone.Query(queryStr(zone, q.Name))
+	if err != nil {
+		log.Errorf("%v Error when querying zone for query, returning SERVFAIL: %v", logHead, err)
+		errMsg = errReply(orig, rcodeServFail, logHead)
+		return
+	}
+	if !found {
+		log.Infof("%v [NXDOMAIN]", logHead)
+		errMsg = errReply(orig, rcodeNxdomain, logHead)
+		return
+	}
+
+	// Recursively search for an answer if we got a CNAME where none was requested.
+	if q.Type != TypeCNAME && rrset.HasCNAME {
+		cname := rrset.CNAME()
+		answers = append(answers, cname)
+
+		cnameQ := Question{Name: cname.Target, Type: TypeCNAME, Class: QClassIN}
+		ans, ok, errMsg := answer(cnameQ, zones, orig, logHead)
+		if !ok {
+			return answers, false, errMsg
+		}
+		answers = append(answers, ans...)
+		return answers, ok, errMsg
+	}
+
+	for rdata := range rrset.Get(q.Type) {
+		answers = append(answers, rdata)
+	}
+
+	ok = true
+	return
 }
 
 // errReply constructs a serialised error response.
