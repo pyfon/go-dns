@@ -1,4 +1,4 @@
-- Make zone parsing so "name" points to a name within the same zone. And "name." points to the absolute domain, name.
+- Fix the fact that a CNAME query for recursive.example.com returns the FQDN recursive1. This could be the cause of the bug when doing a normal query for recursive.example.com
 - This should mean the you can test recursion with:
 
 zone example.com.
