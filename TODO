@@ -1,0 +1,4 @@
+- Make zone parsing so "name" points to a name within the same zone. And "name." points to the absolute domain, name.
+- This should mean the you can test recursion with "recursive CNAME recursive1" "recursive1 CNAME recursive".
+- Fix TXT record issues.
+- Test out all records.
