@@ -21,7 +21,7 @@ func Respond(queryBuf []byte, zones *Trie[Zone], logHead string) []byte {
 
 	answers := make(map[Domain][]RData)
 	for _, q := range query.Question {
-		a, ok, errMsg := answer(q, zones, query, logHead)
+		a, ok, errMsg := answer(q, zones, query, logHead, 0)
 		if !ok {
 			return errMsg
 		}
@@ -47,7 +47,14 @@ func Respond(queryBuf []byte, zones *Trie[Zone], logHead string) []byte {
 // answer attempts to recursively answer one question using all the given zones.
 // If an answer was found, ok will be true and the answers will be returned.
 // Else, ok will be false, and an error reply DNS message will be given.
-func answer(q Question, zones *Trie[Zone], orig DNSMsg, logHead string) (answers []RData, ok bool, errMsg []byte) {
+func answer(q Question, zones *Trie[Zone], orig DNSMsg, logHead string, recurCount uint) (answers []RData, ok bool, errMsg []byte) {
+	if recurCount > 50 {
+		log.Errorf("%v Recursion hit maximum limit", logHead)
+		errMsg = errReply(orig, rcodeServFail, logHead)
+		return
+	}
+	recurCount++
+
 	zone, _ := zones.Search(q.Name.AsFQDN().String())
 	rrset, found, err := zone.Query(queryStr(zone, q.Name))
 	if err != nil {
@@ -67,7 +74,7 @@ func answer(q Question, zones *Trie[Zone], orig DNSMsg, logHead string) (answers
 		answers = append(answers, cname)
 
 		cnameQ := Question{Name: cname.Target, Type: q.Type, Class: q.Class}
-		ans, ok, errMsg := answer(cnameQ, zones, orig, logHead)
+		ans, ok, errMsg := answer(cnameQ, zones, orig, logHead, recurCount)
 		if !ok {
 			return answers, false, errMsg
 		}
