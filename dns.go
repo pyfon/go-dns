@@ -66,7 +66,7 @@ func answer(q Question, zones *Trie[Zone], orig DNSMsg, logHead string) (answers
 		cname := rrset.CNAME()
 		answers = append(answers, cname)
 
-		cnameQ := Question{Name: cname.Target, Type: TypeCNAME, Class: QClassIN}
+		cnameQ := Question{Name: cname.Target, Type: q.Type, Class: q.Class}
 		ans, ok, errMsg := answer(cnameQ, zones, orig, logHead)
 		if !ok {
 			return answers, false, errMsg
