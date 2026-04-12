@@ -14,5 +14,9 @@ wow              TXT      "another string ;;;" 400
 *.pool           AAAA     2001:55::1 ; wow
 *.wow.example    CNAME    ha.com
 
-recursive        CNAME    recursive1
-recursive1       CNAME    recursive
+
+test1    CNAME   test2
+test2    CNAME   test3
+test3    CNAME   test4
+test4    CNAME   test5
+test5    TXT     "recursion works."

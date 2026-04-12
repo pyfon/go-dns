@@ -34,7 +34,7 @@ parseLoop:
 
 		switch tok.Type {
 		case TokenIdent:
-			record, err := p.parseRecord(tok)
+			record, err := p.parseRecord(tok, zone)
 			if err != nil {
 				return zone, err
 			}
@@ -71,7 +71,9 @@ parseLoop:
 }
 
 // parseRecord will parse a record line, starting with the domain name given, and return a corrisponding Record.
-func (p *Parser) parseRecord(nameToken Token) (RData, error) {
+// zone needs to be given to properly parse a domain name,
+// as it may need to be converted to a subdomain of the zone.
+func (p *Parser) parseRecord(nameToken Token, zone Zone) (RData, error) {
 	var record RData
 
 	// Name (domain) field
@@ -122,6 +124,9 @@ func (p *Parser) parseRecord(nameToken Token) (RData, error) {
 		if !target.Valid() {
 			errStr := fmt.Sprintf("%v Invalid RDATA domain: %v", p.Pos(), target)
 			return record, errors.New(errStr)
+		}
+		if !target.FQDN() {
+			target = target + "." + zone.Name.AsFQDN()
 		}
 		record.Target = target
 	case TypeTXT:
