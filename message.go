@@ -119,17 +119,17 @@ func parseRRs(buf []byte, numRRs uint16) (rrs []RR, offset uint, err error) {
 // NewDNSMsg constructs a no-error reply DNSMsg given an original query and answer Rdata,
 // mapped by the original queried domain.
 func NewDNSMsg(original DNSMsg, answers map[Domain][]RData) (reply DNSMsg, err error) {
-	var lenAnswers int
-	for _, v := range answers {
-		for range v {
-			lenAnswers++
+	for domain, answers := range answers {
+		for _, rdata := range answers {
+			reply.Answer = append(reply.Answer, rdata.RR(domain))
 		}
 	}
 
-	if lenAnswers > math.MaxUint16 { // Unlikely, but...
+	if len(reply.Answer) > math.MaxUint16 { // Unlikely, but...
 		err = errors.New("Too many answers given")
 		return
 	}
+
 	reply.Header = Header{
 		ID:      original.Header.ID,
 		QR:      qrReply,
@@ -137,16 +137,11 @@ func NewDNSMsg(original DNSMsg, answers map[Domain][]RData) (reply DNSMsg, err e
 		AA:      true, // We're an authoritive-only DNS server.
 		Rcode:   rcodeNoError,
 		QDCount: uint16(len(original.Question)),
-		ANCount: uint16(lenAnswers),
+		ANCount: uint16(len(reply.Answer)),
 	}
 
 	reply.Question = original.Question
 
-	for domain, answers := range answers {
-		for _, rdata := range answers {
-			reply.Answer = append(reply.Answer, rdata.RR(domain))
-		}
-	}
 	return
 }
 
