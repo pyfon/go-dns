@@ -32,7 +32,7 @@ type RData struct {
 	Name   RecordName
 	Type   RecType
 	Addr   netip.Addr // A, AAAA
-	Target Domain     // For CNAMEs, MX etc
+	Target Domain     // For CNAMEs, MX etc. The zonefile parser always makes the target an FQDN.
 	TXT    TXTData    // TXT, split into 255-byte strings
 	TTL    uint       // Seconds
 	Pref   uint16     // For MX

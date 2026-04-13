@@ -1,4 +1,2 @@
-- Figure out why `dig -p 1053 @localhost test1.example.com` doesn't return the final
-  `test5    TXT     "recursion works."` answer.
 - Fix TXT record issues.
 - Test out all records.
