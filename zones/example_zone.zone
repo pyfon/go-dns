@@ -20,3 +20,8 @@ test2    CNAME   test3
 test3    CNAME   test4
 test4    CNAME   test5
 test5    TXT     "test5haha"
+
+
+ns       NS    test.ns.example.com.
+ptr      PTR   test.ptr.example.com.
+mx       MX    test.mx.example.com.
