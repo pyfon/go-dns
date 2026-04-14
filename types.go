@@ -27,6 +27,7 @@ const (
 type Domain string
 type RecType uint16
 type QClass uint16
+type TXTData [][]byte
 
 type RData struct {
 	Name   RecordName
@@ -54,6 +55,20 @@ var recTypeToName = map[RecType]string{
 
 var qClassByName = map[string]QClass{
 	"IN": QClassIN,
+}
+
+// NewTXTData converts a string of arbitrary length to TXTData.
+func NewTXTData(data string) TXTData {
+	b := []byte(data)
+	var out [][]byte
+
+	for len(b) > 255 {
+		out = append(out, b[:255])
+		b = b[255:]
+	}
+	out = append(out, b)
+
+	return TXTData(out)
 }
 
 // AsFQDN converts d into an FQDN (adds a "." suffix if not present)
@@ -113,6 +128,14 @@ func (q QClass) String() string {
 		return "IN"
 	}
 	return ""
+}
+
+func (t TXTData) String() string {
+	var builder strings.Builder
+	for _, s := range t {
+		builder.WriteString(string(s))
+	}
+	return builder.String()
 }
 
 // TTLOrDefault returns the TTL of the record, falling back to the default of zone if new TTL was specified

@@ -14,7 +14,6 @@ import (
 )
 
 type RecordName string // E.g. wow.example, *.example for zone "com."
-type TXTData [][]byte
 
 type Zone struct {
 	Name    Domain // Domain the zone is responsible for.
@@ -43,19 +42,6 @@ func NewZoneTrie(zones map[Domain]Zone) Trie[Zone] {
 		trie.Insert(string(zone.Name), zone)
 	}
 	return trie
-}
-
-func NewTXTData(data string) TXTData {
-	b := []byte(data)
-	var out [][]byte
-
-	for len(b) > 255 {
-		out = append(out, b[:255])
-		b = b[255:]
-	}
-	out = append(out, b)
-
-	return TXTData(out)
 }
 
 func NewRRSet() RRSet {
@@ -127,14 +113,6 @@ func (r *RRSet) Insert(record RData) error {
 	r.Empty = false
 	r.HasCNAME = recIsCNAME
 	return nil
-}
-
-func (t TXTData) String() string {
-	var builder strings.Builder
-	for _, s := range t {
-		builder.WriteString(string(s))
-	}
-	return builder.String()
 }
 
 // Query will return a RRSet for the given name. Name is taken to be the subdomain within the zone.

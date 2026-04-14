@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"net/netip"
+	"strings"
 )
 
 // iota isn't used here for clarity regarding the DNS protocol.
@@ -112,6 +113,34 @@ func parseRRs(buf []byte, numRRs uint16) (rrs []RR, offset uint, err error) {
 		}
 		rrs = append(rrs, rr)
 		offset += thisOffset
+	}
+	return
+}
+
+// parseTXTData deserialises encoded TXT data from a DNS message into TXTData.
+func parseTXTData(buf []byte) (txtData TXTData, err error) {
+	var builder strings.Builder
+	for {
+		if len(buf) <= 0 {
+			break
+		}
+		length := uint(buf[0])
+		buf = buf[1:]
+		if uint(len(buf)) < length {
+			err = errors.New("RDATA too small for given TXT string length")
+			return
+		}
+		builder.Write(buf[0:length])
+		buf = buf[length:]
+	}
+	return NewTXTData(builder.String()), nil
+}
+
+// Serialise converts TXTData into the DNS message representation.
+func (t TXTData) Serialise() (buf []byte) {
+	for _, s := range t {
+		buf = append(buf, byte(len(s)))
+		buf = append(buf, s...)
 	}
 	return
 }
@@ -341,7 +370,7 @@ func parseRData(t RecType, ttl uint32, buf []byte) (rdata RData, err error) {
 		rdata.Pref = binary.BigEndian.Uint16(buf)
 		rdata.Target, _, err = parseName(buf[2:])
 	case TypeTXT:
-		rdata.TXT = NewTXTData(string(buf))
+		rdata.TXT, err = parseTXTData(buf)
 	case TypeAAAA:
 		rdata.Addr = netip.AddrFrom16([16]byte(buf))
 	}
@@ -407,7 +436,7 @@ func (r RData) Serialise() (payload []byte, err error) {
 		payload = binary.BigEndian.AppendUint16(payload, r.Pref)
 		payload = append(payload, serialiseName(r.Target)...)
 	case TypeTXT:
-		payload = []byte(r.TXT.String())
+		payload = r.TXT.Serialise()
 	default:
 		err = errors.New("Unknown RDATA type")
 	}
